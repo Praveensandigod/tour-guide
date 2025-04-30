@@ -3,7 +3,7 @@ import { Destination } from '@/types';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Bookmark, Map, LandmarkIcon, Mountain, Flag, Temple, MapPin, Navigation, BuildingIcon } from 'lucide-react';
+import { Bookmark, Map, LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon } from 'lucide-react';
 
 interface DestinationCardProps {
   destination: Destination;
@@ -30,7 +30,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
       case 'historical':
         return <LandmarkIcon size={16} className="mr-1" />;
       case 'temple':
-        return <Temple size={16} className="mr-1" />;
+        return <Church size={16} className="mr-1" />;
       case 'nature':
         return <MapPin size={16} className="mr-1" />;
       case 'mountain':

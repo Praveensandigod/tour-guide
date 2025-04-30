@@ -1,10 +1,9 @@
-
 import { useState } from 'react';
 import { useDestinations } from '@/contexts/DestinationContext';
 import DestinationCard from './DestinationCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { LandmarkIcon, Mountain, Flag, Temple, MapPin, Navigation, BuildingIcon } from 'lucide-react';
+import { LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon } from 'lucide-react';
 
 const DestinationGrid = () => {
   const { filteredDestinations, selectedBudget, setSelectedBudget, isLoading } = useDestinations();
@@ -45,7 +44,7 @@ const DestinationGrid = () => {
       case 'historical':
         return <LandmarkIcon className="mr-1 h-4 w-4" />;
       case 'temple':
-        return <Temple className="mr-1 h-4 w-4" />;
+        return <Church className="mr-1 h-4 w-4" />;
       case 'nature':
         return <MapPin className="mr-1 h-4 w-4" />;
       case 'mountain':
