@@ -59,10 +59,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         };
         
         localStorage.setItem('journey_nexus_user', JSON.stringify(user));
+        
+        // Restore saved destinations for this user from their specific storage key
+        const userSavedDestinations = localStorage.getItem(`journey_nexus_saved_destinations_${email}`);
+        if (userSavedDestinations) {
+          localStorage.setItem('journey_nexus_saved_destinations', userSavedDestinations);
+        }
+        
         setUser(user);
         toast({
           title: "Login successful",
-          description: "Welcome back!",
+          description: "Welcome back! Your saved destinations have been restored.",
         });
       } else {
         throw new Error('Invalid email or password');
@@ -94,6 +101,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       };
       
       localStorage.setItem('journey_nexus_user', JSON.stringify(user));
+      
+      // Initialize empty saved destinations for new user
+      localStorage.setItem(`journey_nexus_saved_destinations_${email}`, JSON.stringify([]));
+      localStorage.setItem('journey_nexus_saved_destinations', JSON.stringify([]));
+      
       setUser(user);
       toast({
         title: "Registration successful",
@@ -114,6 +126,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const logout = async () => {
     setIsLoading(true);
     await new Promise(resolve => setTimeout(resolve, 500));
+    
+    if (user?.email) {
+      // Save current destinations to user-specific storage before logout
+      const currentDestinations = localStorage.getItem('journey_nexus_saved_destinations');
+      if (currentDestinations) {
+        localStorage.setItem(`journey_nexus_saved_destinations_${user.email}`, currentDestinations);
+      }
+    }
+    
     localStorage.removeItem('journey_nexus_user');
     localStorage.removeItem('journey_nexus_saved_destinations');
     setUser(null);

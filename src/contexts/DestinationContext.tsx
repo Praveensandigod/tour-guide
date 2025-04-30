@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Destination } from '@/types';
 import destinationsData from '@/data/destinations';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from './AuthContext';
 
 interface DestinationContextType {
   destinations: Destination[];
@@ -40,6 +41,7 @@ export const DestinationProvider = ({ children }: DestinationProviderProps) => {
   const [currentSearchQuery, setCurrentSearchQuery] = useState('');
   const [selectedBudget, setSelectedBudget] = useState('all');
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Load destinations and saved destinations on mount
   useEffect(() => {
@@ -64,12 +66,30 @@ export const DestinationProvider = ({ children }: DestinationProviderProps) => {
     loadDestinations();
   }, []);
 
+  // Update localStorage when user changes
+  useEffect(() => {
+    if (user?.email) {
+      // When user logs in, check if they have saved destinations in their account
+      const userSavedDestinations = localStorage.getItem(`journey_nexus_saved_destinations_${user.email}`);
+      if (userSavedDestinations) {
+        const parsedDestinations = JSON.parse(userSavedDestinations);
+        setSavedDestinations(parsedDestinations);
+        localStorage.setItem('journey_nexus_saved_destinations', userSavedDestinations);
+      }
+    }
+  }, [user]);
+
   // Save to localStorage whenever savedDestinations changes
   useEffect(() => {
-    if (savedDestinations.length > 0) {
+    if (savedDestinations.length > 0 || user?.email) {
       localStorage.setItem('journey_nexus_saved_destinations', JSON.stringify(savedDestinations));
+      
+      // If user is logged in, also save to their specific storage key
+      if (user?.email) {
+        localStorage.setItem(`journey_nexus_saved_destinations_${user.email}`, JSON.stringify(savedDestinations));
+      }
     }
-  }, [savedDestinations]);
+  }, [savedDestinations, user]);
 
   const saveDestination = (destination: Destination) => {
     if (!isSaved(destination.id)) {

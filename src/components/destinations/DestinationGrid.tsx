@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useDestinations } from '@/contexts/DestinationContext';
 import DestinationCard from './DestinationCard';
@@ -92,6 +93,9 @@ const DestinationGrid = () => {
           </ToggleGroupItem>
           <ToggleGroupItem value="monument" className="flex items-center">
             {getCategoryIcon('monument')} Monuments
+          </ToggleGroupItem>
+          <ToggleGroupItem value="statue" className="flex items-center">
+            {getCategoryIcon('statue')} Statues
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
