@@ -15,6 +15,7 @@ export interface Destination {
   imageUrl: string;
   budget: "low" | "medium" | "high";
   rating: number;
+  category: "historical" | "temple" | "nature" | "mountain" | "beach" | "monument" | "statue";
   coordinates: {
     lat: number;
     lng: number;

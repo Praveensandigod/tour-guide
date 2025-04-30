@@ -3,7 +3,7 @@ import { Destination } from '@/types';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Bookmark, Map } from 'lucide-react';
+import { Bookmark, Map, LandmarkIcon, Mountain, Flag, Temple, MapPin, Navigation, BuildingIcon } from 'lucide-react';
 
 interface DestinationCardProps {
   destination: Destination;
@@ -23,6 +23,31 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
       default:
         return { label: '', class: '' };
     }
+  };
+  
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'historical':
+        return <LandmarkIcon size={16} className="mr-1" />;
+      case 'temple':
+        return <Temple size={16} className="mr-1" />;
+      case 'nature':
+        return <MapPin size={16} className="mr-1" />;
+      case 'mountain':
+        return <Mountain size={16} className="mr-1" />;
+      case 'beach':
+        return <Navigation size={16} className="mr-1" />;
+      case 'monument':
+        return <Flag size={16} className="mr-1" />;
+      case 'statue':
+        return <BuildingIcon size={16} className="mr-1" />;
+      default:
+        return null;
+    }
+  };
+  
+  const getCategoryLabel = (category: string) => {
+    return category.charAt(0).toUpperCase() + category.slice(1);
   };
   
   const budgetInfo = getBudgetLabel(destination.budget);
@@ -49,6 +74,11 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             className={isSaved(destination.id) ? "text-primary" : ""}
           />
         </button>
+        
+        <div className="absolute bottom-2 left-2 bg-black/60 text-white px-2 py-0.5 rounded-full text-xs flex items-center">
+          {getCategoryIcon(destination.category)}
+          {getCategoryLabel(destination.category)}
+        </div>
       </div>
       
       <div className="p-4">
@@ -95,6 +125,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
       
       <Link
         to={`/map?destination=${destination.id}`}
+        state={{ destinationId: destination.id }}
         className="flex items-center justify-center gap-2 p-3 bg-muted/50 border-t text-sm font-medium hover:bg-muted transition-colors"
       >
         <Map size={16} />

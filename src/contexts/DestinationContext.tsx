@@ -108,7 +108,8 @@ export const DestinationProvider = ({ children }: DestinationProviderProps) => {
     return destinations.filter(dest => 
       dest.name.toLowerCase().includes(normalizedQuery) || 
       dest.location.toLowerCase().includes(normalizedQuery) ||
-      dest.description.toLowerCase().includes(normalizedQuery)
+      dest.description.toLowerCase().includes(normalizedQuery) ||
+      dest.category.toLowerCase().includes(normalizedQuery)
     );
   };
 

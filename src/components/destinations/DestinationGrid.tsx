@@ -2,11 +2,13 @@
 import { useState } from 'react';
 import { useDestinations } from '@/contexts/DestinationContext';
 import DestinationCard from './DestinationCard';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { LandmarkIcon, Mountain, Flag, Temple, MapPin, Navigation, BuildingIcon } from 'lucide-react';
 
 const DestinationGrid = () => {
   const { filteredDestinations, selectedBudget, setSelectedBudget, isLoading } = useDestinations();
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   
   if (isLoading) {
     return (
@@ -31,8 +33,70 @@ const DestinationGrid = () => {
     );
   }
   
+  const filteredByCategory = (destinations: any[]) => {
+    if (selectedCategory === "all") {
+      return destinations;
+    }
+    return destinations.filter(dest => dest.category === selectedCategory);
+  };
+  
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'historical':
+        return <LandmarkIcon className="mr-1 h-4 w-4" />;
+      case 'temple':
+        return <Temple className="mr-1 h-4 w-4" />;
+      case 'nature':
+        return <MapPin className="mr-1 h-4 w-4" />;
+      case 'mountain':
+        return <Mountain className="mr-1 h-4 w-4" />;
+      case 'beach':
+        return <Navigation className="mr-1 h-4 w-4" />;
+      case 'monument':
+        return <Flag className="mr-1 h-4 w-4" />;
+      case 'statue':
+        return <BuildingIcon className="mr-1 h-4 w-4" />;
+      default:
+        return null;
+    }
+  };
+  
   return (
     <div className="py-4 px-4">
+      <div className="mb-6">
+        <h3 className="text-sm font-medium mb-2">Filter by Category</h3>
+        <ToggleGroup 
+          type="single" 
+          value={selectedCategory} 
+          onValueChange={(value) => {
+            if (value) setSelectedCategory(value);
+          }}
+          className="flex flex-wrap justify-start gap-2 mb-4"
+        >
+          <ToggleGroupItem value="all" className="flex items-center">
+            All
+          </ToggleGroupItem>
+          <ToggleGroupItem value="historical" className="flex items-center">
+            {getCategoryIcon('historical')} Historical
+          </ToggleGroupItem>
+          <ToggleGroupItem value="temple" className="flex items-center">
+            {getCategoryIcon('temple')} Temples
+          </ToggleGroupItem>
+          <ToggleGroupItem value="nature" className="flex items-center">
+            {getCategoryIcon('nature')} Nature
+          </ToggleGroupItem>
+          <ToggleGroupItem value="mountain" className="flex items-center">
+            {getCategoryIcon('mountain')} Mountains
+          </ToggleGroupItem>
+          <ToggleGroupItem value="beach" className="flex items-center">
+            {getCategoryIcon('beach')} Beaches
+          </ToggleGroupItem>
+          <ToggleGroupItem value="monument" className="flex items-center">
+            {getCategoryIcon('monument')} Monuments
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
       <Tabs 
         defaultValue={selectedBudget} 
         onValueChange={(value) => setSelectedBudget(value)}
@@ -46,28 +110,28 @@ const DestinationGrid = () => {
         </TabsList>
         <TabsContent value="all" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {filteredDestinations().map((destination) => (
+            {filteredByCategory(filteredDestinations()).map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>
         </TabsContent>
         <TabsContent value="low" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {filteredDestinations('low').map((destination) => (
+            {filteredByCategory(filteredDestinations('low')).map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>
         </TabsContent>
         <TabsContent value="medium" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {filteredDestinations('medium').map((destination) => (
+            {filteredByCategory(filteredDestinations('medium')).map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>
         </TabsContent>
         <TabsContent value="high" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {filteredDestinations('high').map((destination) => (
+            {filteredByCategory(filteredDestinations('high')).map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>

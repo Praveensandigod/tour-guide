@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,13 +8,16 @@ import { Button } from '@/components/ui/button';
 import { MapPin, ArrowRight } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { useToast } from '@/components/ui/use-toast';
 
 const MapView = () => {
   const { destinations } = useDestinations();
   const { id: destinationId } = useParams();
   const location = useLocation();
   const selectedDestinationId = location.state?.destinationId || destinationId;
+  const { toast } = useToast();
   
+  // Replace this with your free Mapbox API token
   const mapboxToken = 'pk.eyJ1IjoibG92YWJsZSIsImEiOiJjbGdmaWJuOXYwZjZzM3NwZ2Z1azFibnluIn0.4Pt5HHNJJ9jiC57IDZc2lg';
   
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -24,26 +27,26 @@ const MapView = () => {
   const [isDirectionMode, setIsDirectionMode] = useState(!!selectedDestinationId);
   const [isLoading, setIsLoading] = useState(false);
   const [directionsData, setDirectionsData] = useState<any>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
   
   useEffect(() => {
     if (mapContainer.current && !map.current) {
       const loadMap = async () => {
         try {
-          // Dynamically import mapbox-gl CSS
-          
           mapboxgl.accessToken = mapboxToken;
           
           map.current = new mapboxgl.Map({
             container: mapContainer.current!,
             style: 'mapbox://styles/mapbox/streets-v11',
-            center: [0, 20], // Default center on world
-            zoom: 1.5,
+            center: [78.9629, 20.5937], // Center on India
+            zoom: 3,
           });
           
           map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
           
           // Add destinations markers
           map.current.on('load', () => {
+            setMapLoaded(true);
             // Load destination markers
             destinations.forEach(destination => {
               const popup = new mapboxgl.Popup({ offset: 25 }).setText(
@@ -81,6 +84,11 @@ const MapView = () => {
           });
         } catch (error) {
           console.error("Error initializing map:", error);
+          toast({
+            title: "Map Error",
+            description: "There was a problem loading the map. Please check your API key.",
+            variant: "destructive"
+          });
         }
       };
       
@@ -93,7 +101,7 @@ const MapView = () => {
         map.current = null;
       }
     };
-  }, [destinations, selectedDestinationId, mapboxToken]);
+  }, [destinations, selectedDestinationId, mapboxToken, toast]);
   
   const getCoordinatesFromPlace = async (placeName: string) => {
     try {
@@ -110,6 +118,11 @@ const MapView = () => {
       return null;
     } catch (error) {
       console.error("Error getting coordinates:", error);
+      toast({
+        title: "Geocoding Error",
+        description: "Could not find the location you entered. Please try a different location.",
+        variant: "destructive"
+      });
       return null;
     }
   };
@@ -123,12 +136,23 @@ const MapView = () => {
       return await response.json();
     } catch (error) {
       console.error("Error getting directions:", error);
+      toast({
+        title: "Directions Error",
+        description: "Could not get directions between these locations.",
+        variant: "destructive"
+      });
       return null;
     }
   };
   
   const handleDirections = async () => {
-    if (!startLocation || !endLocation) return;
+    if (!startLocation || !endLocation) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter both start and end locations.",
+      });
+      return;
+    }
     
     setIsLoading(true);
     
@@ -137,7 +161,11 @@ const MapView = () => {
       const endCoords = await getCoordinatesFromPlace(endLocation);
       
       if (!startCoords || !endCoords) {
-        console.error("Couldn't find coordinates for the locations");
+        toast({
+          title: "Location Error",
+          description: "Could not find one or both locations. Please try different locations.",
+          variant: "destructive"
+        });
         setIsLoading(false);
         return;
       }
@@ -146,15 +174,28 @@ const MapView = () => {
       setDirectionsData(directions);
       
       if (!directions || !directions.routes || directions.routes.length === 0) {
-        console.error("No routes found");
+        toast({
+          title: "No Routes Found",
+          description: "Could not find a route between these locations.",
+          variant: "destructive"
+        });
         setIsLoading(false);
         return;
       }
       
       const route = directions.routes[0].geometry.coordinates;
       
+      if (!mapLoaded || !map.current) {
+        toast({
+          title: "Map Not Ready",
+          description: "The map is still loading. Please try again in a moment.",
+        });
+        setIsLoading(false);
+        return;
+      }
+
       // Check if the source exists first
-      if (map.current?.getSource('route')) {
+      if (map.current.getSource('route')) {
         // Use GeoJSONSource methods
         const routeSource = map.current.getSource('route') as mapboxgl.GeoJSONSource;
         routeSource.setData({
@@ -167,7 +208,7 @@ const MapView = () => {
         });
       } else {
         // First time we're adding the route, so we need to add a layer
-        map.current?.addSource('route', {
+        map.current.addSource('route', {
           type: 'geojson',
           data: {
             type: 'Feature',
@@ -179,7 +220,7 @@ const MapView = () => {
           }
         });
         
-        map.current?.addLayer({
+        map.current.addLayer({
           id: 'route',
           type: 'line',
           source: 'route',
@@ -202,12 +243,22 @@ const MapView = () => {
         bounds.extend(point as [number, number]);
       });
       
-      map.current?.fitBounds(bounds, {
+      map.current.fitBounds(bounds, {
         padding: 80
+      });
+
+      toast({
+        title: "Directions Found",
+        description: `Route found! Distance: ${(directions.routes[0].distance / 1000).toFixed(2)} km`,
       });
       
     } catch (error) {
       console.error("Error handling directions:", error);
+      toast({
+        title: "Direction Error",
+        description: "An error occurred while getting directions.",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
