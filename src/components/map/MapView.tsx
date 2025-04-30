@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapPin, ArrowRight } from 'lucide-react';
+import mapboxgl from 'mapbox-gl';
 
 const MapView = () => {
   const { destinations } = useDestinations();
@@ -16,7 +17,7 @@ const MapView = () => {
   const mapboxToken = 'pk.eyJ1IjoibG92YWJsZSIsImEiOiJjbGdmaWJuOXYwZjZzM3NwZ2Z1azFibnluIn0.4Pt5HHNJJ9jiC57IDZc2lg';
   
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<any>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
   const [startLocation, setStartLocation] = useState('');
   const [endLocation, setEndLocation] = useState('');
   const [isDirectionMode, setIsDirectionMode] = useState(!!destinationId);
@@ -27,26 +28,25 @@ const MapView = () => {
     if (mapContainer.current && !map.current) {
       const loadMap = async () => {
         try {
-          // Dynamically import mapboxgl to avoid SSR issues
-          const mapboxgl = await import('mapbox-gl');
+          // Dynamically import mapbox-gl CSS
           await import('mapbox-gl/dist/mapbox-gl.css');
           
-          mapboxgl.default.accessToken = mapboxToken;
+          mapboxgl.accessToken = mapboxToken;
           
-          map.current = new mapboxgl.default.Map({
+          map.current = new mapboxgl.Map({
             container: mapContainer.current!,
             style: 'mapbox://styles/mapbox/streets-v11',
             center: [0, 20], // Default center on world
             zoom: 1.5,
           });
           
-          map.current.addControl(new mapboxgl.default.NavigationControl(), 'top-right');
+          map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
           
           // Add destinations markers
           map.current.on('load', () => {
             // Load destination markers
             destinations.forEach(destination => {
-              const popup = new mapboxgl.default.Popup({ offset: 25 }).setText(
+              const popup = new mapboxgl.Popup({ offset: 25 }).setText(
                 destination.name
               );
               
@@ -58,17 +58,17 @@ const MapView = () => {
               el.style.backgroundSize = '100%';
               el.style.cursor = 'pointer';
               
-              new mapboxgl.default.Marker(el)
+              new mapboxgl.Marker(el)
                 .setLngLat([destination.coordinates.lng, destination.coordinates.lat])
                 .setPopup(popup)
-                .addTo(map.current);
+                .addTo(map.current!);
             });
             
             // If destination ID is provided, center map on that destination
             if (destinationId) {
               const destination = destinations.find(d => d.id === destinationId);
               if (destination) {
-                map.current.flyTo({
+                map.current!.flyTo({
                   center: [destination.coordinates.lng, destination.coordinates.lat],
                   zoom: 10,
                   essential: true
