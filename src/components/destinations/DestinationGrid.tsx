@@ -1,6 +1,5 @@
-
 import { useState } from 'react';
-import { useDestinations } from '@/contexts/DestinationContext';
+import { useDestinations, AdvancedFilterOptions } from '@/contexts/DestinationContext';
 import DestinationCard from './DestinationCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -8,10 +7,14 @@ import { LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon 
 
 interface DestinationGridProps {
   stateFilter?: string;
+  advancedFilterOptions?: AdvancedFilterOptions;
 }
 
-const DestinationGrid = ({ stateFilter = 'All States' }: DestinationGridProps) => {
-  const { filteredDestinations, selectedBudget, setSelectedBudget, isLoading } = useDestinations();
+const DestinationGrid = ({ 
+  stateFilter = 'All States', 
+  advancedFilterOptions 
+}: DestinationGridProps) => {
+  const { filteredDestinations, selectedBudget, setSelectedBudget, isLoading, advancedFilter } = useDestinations();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   
   if (isLoading) {
@@ -37,8 +40,18 @@ const DestinationGrid = ({ stateFilter = 'All States' }: DestinationGridProps) =
     );
   }
   
-  const applyFilters = (destinations: any[]) => {
-    let filtered = destinations;
+  const getDestinations = () => {
+    // If advanced filter options are provided, use them
+    if (advancedFilterOptions) {
+      return advancedFilter({
+        ...advancedFilterOptions,
+        budget: selectedBudget !== 'all' ? selectedBudget : undefined,
+        category: selectedCategory !== 'all' ? selectedCategory : undefined,
+      });
+    }
+    
+    // Otherwise, use the basic filters
+    let filtered = filteredDestinations(selectedBudget !== 'all' ? selectedBudget : undefined);
     
     // Apply category filter
     if (selectedCategory !== "all") {
@@ -55,6 +68,8 @@ const DestinationGrid = ({ stateFilter = 'All States' }: DestinationGridProps) =
     
     return filtered;
   };
+  
+  const displayDestinations = getDestinations();
   
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -129,33 +144,40 @@ const DestinationGrid = ({ stateFilter = 'All States' }: DestinationGridProps) =
         </TabsList>
         <TabsContent value="all" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {applyFilters(filteredDestinations()).map((destination) => (
+            {displayDestinations.map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>
         </TabsContent>
         <TabsContent value="low" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {applyFilters(filteredDestinations('low')).map((destination) => (
+            {displayDestinations.map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>
         </TabsContent>
         <TabsContent value="medium" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {applyFilters(filteredDestinations('medium')).map((destination) => (
+            {displayDestinations.map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>
         </TabsContent>
         <TabsContent value="high" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {applyFilters(filteredDestinations('high')).map((destination) => (
+            {displayDestinations.map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>
         </TabsContent>
       </Tabs>
+      
+      {displayDestinations.length === 0 && (
+        <div className="text-center py-10">
+          <p className="text-lg font-medium mb-2">No destinations match your filters</p>
+          <p className="text-muted-foreground">Try adjusting your filters to find more destinations</p>
+        </div>
+      )}
     </div>
   );
 };
