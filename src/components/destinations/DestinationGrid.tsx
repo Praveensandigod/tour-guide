@@ -6,7 +6,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon } from 'lucide-react';
 
-const DestinationGrid = () => {
+interface DestinationGridProps {
+  stateFilter?: string;
+}
+
+const DestinationGrid = ({ stateFilter = 'All States' }: DestinationGridProps) => {
   const { filteredDestinations, selectedBudget, setSelectedBudget, isLoading } = useDestinations();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   
@@ -33,11 +37,23 @@ const DestinationGrid = () => {
     );
   }
   
-  const filteredByCategory = (destinations: any[]) => {
-    if (selectedCategory === "all") {
-      return destinations;
+  const applyFilters = (destinations: any[]) => {
+    let filtered = destinations;
+    
+    // Apply category filter
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter(dest => dest.category === selectedCategory);
     }
-    return destinations.filter(dest => dest.category === selectedCategory);
+    
+    // Apply state filter
+    if (stateFilter && stateFilter !== 'All States') {
+      filtered = filtered.filter(dest => {
+        const state = dest.location.split(',').pop()?.trim();
+        return state === stateFilter;
+      });
+    }
+    
+    return filtered;
   };
   
   const getCategoryIcon = (category: string) => {
@@ -62,7 +78,7 @@ const DestinationGrid = () => {
   };
   
   return (
-    <div className="py-4 px-4">
+    <div className="py-4">
       <div className="mb-6">
         <h3 className="text-sm font-medium mb-2">Filter by Category</h3>
         <ToggleGroup 
@@ -113,28 +129,28 @@ const DestinationGrid = () => {
         </TabsList>
         <TabsContent value="all" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {filteredByCategory(filteredDestinations()).map((destination) => (
+            {applyFilters(filteredDestinations()).map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>
         </TabsContent>
         <TabsContent value="low" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {filteredByCategory(filteredDestinations('low')).map((destination) => (
+            {applyFilters(filteredDestinations('low')).map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>
         </TabsContent>
         <TabsContent value="medium" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {filteredByCategory(filteredDestinations('medium')).map((destination) => (
+            {applyFilters(filteredDestinations('medium')).map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>
         </TabsContent>
         <TabsContent value="high" className="mt-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {filteredByCategory(filteredDestinations('high')).map((destination) => (
+            {applyFilters(filteredDestinations('high')).map((destination) => (
               <DestinationCard key={destination.id} destination={destination} />
             ))}
           </div>

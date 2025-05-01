@@ -18,6 +18,7 @@ interface DestinationContextType {
   setCurrentSearchQuery: (query: string) => void;
   selectedBudget: string;
   setSelectedBudget: (budget: string) => void;
+  getStatesList: () => string[];
 }
 
 const DestinationContext = createContext<DestinationContextType | undefined>(undefined);
@@ -132,6 +133,16 @@ export const DestinationProvider = ({ children }: DestinationProviderProps) => {
       dest.category.toLowerCase().includes(normalizedQuery)
     );
   };
+  
+  // Get all unique states from destinations
+  const getStatesList = () => {
+    const states = new Set<string>();
+    destinations.forEach(dest => {
+      const state = dest.location.split(',').pop()?.trim();
+      if (state) states.add(state);
+    });
+    return Array.from(states).sort();
+  };
 
   const value = {
     destinations,
@@ -146,6 +157,7 @@ export const DestinationProvider = ({ children }: DestinationProviderProps) => {
     setCurrentSearchQuery,
     selectedBudget,
     setSelectedBudget,
+    getStatesList,
   };
 
   return <DestinationContext.Provider value={value}>{children}</DestinationContext.Provider>;

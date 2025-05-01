@@ -5,7 +5,7 @@ import { useDestinations } from '@/contexts/DestinationContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { MapPin, ArrowRight } from 'lucide-react';
+import { MapPin, ArrowRight, Volume2, VolumeX } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useToast } from '@/components/ui/use-toast';
@@ -17,8 +17,8 @@ const MapView = () => {
   const selectedDestinationId = location.state?.destinationId || destinationId;
   const { toast } = useToast();
   
-  // Replace this with your free Mapbox API token
-  const mapboxToken = 'pk.eyJ1IjoibG92YWJsZSIsImEiOiJjbGdmaWJuOXYwZjZzM3NwZ2Z1azFibnluIn0.4Pt5HHNJJ9jiC57IDZc2lg';
+  // Using a free Mapbox API token
+  const mapboxToken = 'pk.eyJ1IjoicHVibGljLXRva2VuLWRlbW8iLCJhIjoiY2xreWUyZHh1MGRrczNxcGRwZXhsZzBueiJ9.5Zv_ryn8-KmAT2LQQnLmkQ';
   
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -28,6 +28,9 @@ const MapView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [directionsData, setDirectionsData] = useState<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [isSpeakingDirections, setIsSpeakingDirections] = useState(false);
+  const speechSynthesis = window.speechSynthesis;
+  const speechUtterance = useRef<SpeechSynthesisUtterance | null>(null);
   
   useEffect(() => {
     if (mapContainer.current && !map.current) {
@@ -86,7 +89,7 @@ const MapView = () => {
           console.error("Error initializing map:", error);
           toast({
             title: "Map Error",
-            description: "There was a problem loading the map. Please check your API key.",
+            description: "There was a problem loading the map. Please try again.",
             variant: "destructive"
           });
         }
@@ -100,6 +103,9 @@ const MapView = () => {
         map.current.remove();
         map.current = null;
       }
+      if (speechUtterance.current) {
+        speechSynthesis.cancel();
+      }
     };
   }, [destinations, selectedDestinationId, mapboxToken, toast]);
   
@@ -108,7 +114,7 @@ const MapView = () => {
       const response = await fetch(
         `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
           placeName
-        )}.json?access_token=${mapboxToken}&limit=1`
+        )}.json?access_token=${mapboxToken}&limit=1&country=in`
       );
       const data = await response.json();
       
@@ -264,11 +270,69 @@ const MapView = () => {
     }
   };
   
+  const speakDirections = () => {
+    if (!directionsData?.routes?.[0]?.legs?.[0]?.steps) {
+      toast({
+        title: "No Directions",
+        description: "Please get directions first before using voice guidance.",
+      });
+      return;
+    }
+    
+    if (isSpeakingDirections) {
+      // Stop speaking if already active
+      speechSynthesis.cancel();
+      setIsSpeakingDirections(false);
+      return;
+    }
+    
+    const steps = directionsData.routes[0].legs[0].steps;
+    const distance = (directionsData.routes[0].distance / 1000).toFixed(2);
+    const duration = Math.floor(directionsData.routes[0].duration / 60);
+    
+    let directionsText = `Starting navigation from ${startLocation} to ${endLocation}. `;
+    directionsText += `Total distance is ${distance} kilometers and will take approximately ${duration} minutes. `;
+    
+    // Add first 5 instructions to avoid too long speech
+    steps.slice(0, 5).forEach((step: any, index: number) => {
+      const distanceKm = (step.distance / 1000).toFixed(1);
+      directionsText += `Step ${index + 1}: ${step.maneuver.instruction} for ${distanceKm} kilometers. `;
+    });
+    
+    if (steps.length > 5) {
+      directionsText += "More steps available. Please check the map for complete directions.";
+    }
+    
+    speechUtterance.current = new SpeechSynthesisUtterance(directionsText);
+    
+    // Set properties
+    speechUtterance.current.rate = 0.9; // slightly slower
+    speechUtterance.current.pitch = 1;
+    speechUtterance.current.volume = 1;
+    
+    // Event listeners
+    speechUtterance.current.onend = () => {
+      setIsSpeakingDirections(false);
+    };
+    
+    speechUtterance.current.onerror = () => {
+      setIsSpeakingDirections(false);
+      toast({
+        title: "Voice Guidance Error",
+        description: "There was an error with the voice guidance.",
+        variant: "destructive"
+      });
+    };
+    
+    setIsSpeakingDirections(true);
+    speechSynthesis.speak(speechUtterance.current);
+  };
+  
   return (
     <div className="h-[80vh] w-full relative">
       <div ref={mapContainer} className="absolute top-0 left-0 right-0 bottom-0" />
       
-      <Card className="absolute top-4 left-4 w-[300px] z-10 shadow-lg">
+      <Card className="absolute top-4 left-4 w-[320px] z-10 shadow-lg">
         <CardContent className="p-4">
           <div className="mb-2">
             <label className="block mb-1 text-sm font-medium">Start Location</label>
@@ -300,9 +364,27 @@ const MapView = () => {
           </Button>
           
           {directionsData && directionsData.routes && directionsData.routes.length > 0 && (
-            <div className="mt-4 text-sm">
-              <p className="font-bold">Distance: {(directionsData.routes[0].distance / 1000).toFixed(2)} km</p>
-              <p className="font-bold">Duration: {Math.floor(directionsData.routes[0].duration / 60)} mins</p>
+            <div className="mt-4">
+              <div className="text-sm mb-2">
+                <p className="font-bold">Distance: {(directionsData.routes[0].distance / 1000).toFixed(2)} km</p>
+                <p className="font-bold">Duration: {Math.floor(directionsData.routes[0].duration / 60)} mins</p>
+              </div>
+              
+              <Button 
+                variant="outline" 
+                className="w-full flex justify-center items-center" 
+                onClick={speakDirections}
+              >
+                {isSpeakingDirections ? (
+                  <>
+                    <VolumeX className="mr-2 h-4 w-4" /> Stop Voice Guidance
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="mr-2 h-4 w-4" /> Start Voice Guidance
+                  </>
+                )}
+              </Button>
             </div>
           )}
         </CardContent>
