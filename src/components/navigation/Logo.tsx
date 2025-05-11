@@ -7,7 +7,7 @@ const Logo = () => {
     <Link to="/" className="flex items-center gap-2">
       <div className="relative w-8 h-8 overflow-hidden">
         <img 
-          src="https://img.icons8.com/fluency/96/airplane-mode-on.png" 
+          src="https://img.icons8.com/fluency/96/travel-journal.png" 
           alt="Journey Nexus Logo" 
           className="w-full h-full object-contain"
         />
