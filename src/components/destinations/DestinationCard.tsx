@@ -1,11 +1,9 @@
 
-import { useState, useEffect } from 'react';
 import { Destination } from '@/types';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Bookmark, Map, LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon, ImageIcon } from 'lucide-react';
+import { Bookmark, Map, LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon } from 'lucide-react';
 
 interface DestinationCardProps {
   destination: Destination;
@@ -13,30 +11,15 @@ interface DestinationCardProps {
 
 const DestinationCard = ({ destination }: DestinationCardProps) => {
   const { saveDestination, isSaved } = useDestinations();
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
-  
-  // Add transition effect when image loads
-  useEffect(() => {
-    const img = new Image();
-    img.src = destination.imageUrl;
-    img.onload = () => setImageLoaded(true);
-    img.onerror = () => setImageError(true);
-    
-    return () => {
-      img.onload = null;
-      img.onerror = null;
-    };
-  }, [destination.imageUrl]);
   
   const getBudgetLabel = (budget: string) => {
     switch (budget) {
       case 'low':
-        return { label: 'Budget', class: 'bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full' };
+        return { label: 'Budget', class: 'budget-badge budget-low' };
       case 'medium':
-        return { label: 'Mid-range', class: 'bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full' };
+        return { label: 'Mid-range', class: 'budget-badge budget-medium' };
       case 'high':
-        return { label: 'Luxury', class: 'bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full' };
+        return { label: 'Luxury', class: 'budget-badge budget-high' };
       default:
         return { label: '', class: '' };
     }
@@ -70,28 +53,13 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   const budgetInfo = getBudgetLabel(destination.budget);
   
   return (
-    <div className="bg-card rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 flex flex-col">
-      <div className="relative h-48">
-        {!imageLoaded && !imageError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-muted">
-            <Skeleton className="h-full w-full" />
-          </div>
-        )}
-        
-        {imageError ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-muted">
-            <ImageIcon size={48} className="text-muted-foreground opacity-50" />
-          </div>
-        ) : (
-          <img
-            src={destination.imageUrl}
-            alt={destination.name}
-            className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-            onLoad={() => setImageLoaded(true)}
-            onError={() => setImageError(true)}
-          />
-        )}
-
+    <div className="destination-card group">
+      <div className="relative">
+        <img
+          src={destination.imageUrl}
+          alt={destination.name}
+          className="w-full h-48 object-cover rounded-t-lg"
+        />
         <button
           onClick={(e) => {
             e.preventDefault();
@@ -113,7 +81,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
         </div>
       </div>
       
-      <div className="p-4 flex-grow">
+      <div className="p-4">
         <div className="flex justify-between items-start mb-2">
           <h3 className="font-bold text-lg truncate">{destination.name}</h3>
           <span className={budgetInfo.class}>{budgetInfo.label}</span>
@@ -123,7 +91,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
         
         <p className="text-sm line-clamp-2 mb-4 text-muted-foreground">{destination.description}</p>
         
-        <div className="flex justify-between items-center mt-auto">
+        <div className="flex justify-between items-center">
           <div className="flex items-center">
             <div className="flex items-center">
               {Array.from({ length: 5 }).map((_, i) => (
