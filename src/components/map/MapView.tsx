@@ -7,11 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapPin, ArrowRight, Volume2, VolumeX } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import ApiKeyInput from './ApiKeyInput';
 import { getGoogleMapsApiKey } from '@/config/apiConfig';
 import { useGoogleMapsApi } from '@/utils/googleMapsService';
-import { debounce } from 'use-debounce';
+import { useDebounce } from 'use-debounce';
 
 const MapView = () => {
   const { destinations } = useDestinations();
@@ -62,7 +62,7 @@ const MapView = () => {
     
     // Add destination markers
     destinations.forEach(destination => {
-      new google.maps.Marker({
+      new window.google.maps.Marker({
         position: { lat: destination.coordinates.lat, lng: destination.coordinates.lng },
         map,
         title: destination.name,
@@ -117,7 +117,7 @@ const MapView = () => {
       // Find start location
       const startResults = await new Promise<google.maps.places.PlaceSearchRequest | null>((resolve, reject) => {
         placesServiceRef.current!.findPlaceFromQuery(geocodeStartRequest, (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+          if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
             resolve(results[0]);
           } else {
             reject(new Error("Could not find start location"));
@@ -128,7 +128,7 @@ const MapView = () => {
       // Find end location
       const endResults = await new Promise<google.maps.places.PlaceSearchRequest | null>((resolve, reject) => {
         placesServiceRef.current!.findPlaceFromQuery(geocodeEndRequest, (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+          if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
             resolve(results[0]);
           } else {
             reject(new Error("Could not find end location"));
@@ -152,10 +152,10 @@ const MapView = () => {
           {
             origin: startResults.geometry!.location!,
             destination: endResults.geometry!.location!,
-            travelMode: google.maps.TravelMode.DRIVING
+            travelMode: window.google.maps.TravelMode.DRIVING
           },
           (result, status) => {
-            if (status === google.maps.DirectionsStatus.OK && result) {
+            if (status === window.google.maps.DirectionsStatus.OK && result) {
               resolve(result);
             } else {
               reject(new Error(`Directions request failed: ${status}`));

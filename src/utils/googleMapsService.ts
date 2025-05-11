@@ -107,7 +107,7 @@ export const usePlaceAutocomplete = (input: string, apiKey: string | null) => {
     try {
       // Check if Google Maps API is loaded
       if (window.google && window.google.maps && window.google.maps.places) {
-        const autocompleteService = new google.maps.places.AutocompleteService();
+        const autocompleteService = new window.google.maps.places.AutocompleteService();
         const results = await new Promise<google.maps.places.AutocompletePrediction[]>((resolve, reject) => {
           autocompleteService.getPlacePredictions(
             {
@@ -116,7 +116,7 @@ export const usePlaceAutocomplete = (input: string, apiKey: string | null) => {
               types: ['tourist_attraction', 'point_of_interest', 'establishment', 'natural_feature'],
             },
             (predictions, status) => {
-              if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions) {
+              if (status !== window.google.maps.places.PlacesServiceStatus.OK || !predictions) {
                 reject(new Error(`Place autocomplete failed: ${status}`));
                 return;
               }
@@ -157,14 +157,14 @@ export const getPlaceDetails = async (
   if (!map || !placeId) return null;
   
   return new Promise((resolve, reject) => {
-    const service = new google.maps.places.PlacesService(map);
+    const service = new window.google.maps.places.PlacesService(map);
     service.getDetails(
       {
         placeId: placeId,
         fields: ['name', 'geometry', 'formatted_address', 'photos', 'rating', 'types', 'opening_hours', 'website']
       },
       (result, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && result) {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && result) {
           resolve(result);
         } else {
           reject(new Error(`Place details request failed: ${status}`));
