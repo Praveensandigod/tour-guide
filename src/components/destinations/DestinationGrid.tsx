@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useDestinations, AdvancedFilterOptions } from '@/contexts/DestinationContext';
+import { useDestinations } from '@/contexts/DestinationContext';
 import DestinationCard from './DestinationCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -7,14 +7,12 @@ import { LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon 
 
 interface DestinationGridProps {
   stateFilter?: string;
-  advancedFilterOptions?: AdvancedFilterOptions;
 }
 
 const DestinationGrid = ({ 
-  stateFilter = 'All States', 
-  advancedFilterOptions 
+  stateFilter = 'All States'
 }: DestinationGridProps) => {
-  const { filteredDestinations, selectedBudget, setSelectedBudget, isLoading, advancedFilter } = useDestinations();
+  const { filteredDestinations, selectedBudget, setSelectedBudget, isLoading } = useDestinations();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   
   if (isLoading) {
@@ -41,16 +39,6 @@ const DestinationGrid = ({
   }
   
   const getDestinations = () => {
-    // If advanced filter options are provided, use them
-    if (advancedFilterOptions) {
-      return advancedFilter({
-        ...advancedFilterOptions,
-        budget: selectedBudget !== 'all' ? selectedBudget : undefined,
-        category: selectedCategory !== 'all' ? selectedCategory : undefined,
-      });
-    }
-    
-    // Otherwise, use the basic filters
     let filtered = filteredDestinations(selectedBudget !== 'all' ? selectedBudget : undefined);
     
     // Apply category filter

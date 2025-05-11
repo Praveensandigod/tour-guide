@@ -1,6 +1,5 @@
 
 import { useInView } from 'react-intersection-observer';
-import { Button } from '@/components/ui/button';
 
 const AboutSection = () => {
   const { ref, inView } = useInView({
@@ -25,7 +24,6 @@ const AboutSection = () => {
             <p className="text-lg mb-6 text-muted-foreground">
               Whether you're a budget backpacker, a luxury traveler, or somewhere in between, we've curated destinations for every type of adventurer. Use our interactive map features to plan your routes and make the most of your travels.
             </p>
-            <Button variant="outline">Learn More About Us</Button>
           </div>
           <div className="relative">
             <div className="rounded-lg overflow-hidden shadow-lg">
