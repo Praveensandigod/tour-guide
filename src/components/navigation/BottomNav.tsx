@@ -1,58 +1,82 @@
 
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Search, Map, Bookmark, User } from 'lucide-react';
+import { Home, Map, Compass, Bookmark, User } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import Logo from './Logo';
 
 const BottomNav = () => {
   const location = useLocation();
-  
-  const navItems = [
-    {
-      name: 'Home',
-      path: '/',
-      icon: Home,
-    },
-    {
-      name: 'Explore',
-      path: '/recommendations',
-      icon: Search,
-    },
-    {
-      name: 'Map',
-      path: '/map',
-      icon: Map,
-    },
-    {
-      name: 'Saved',
-      path: '/saved',
-      icon: Bookmark,
-    },
-    {
-      name: 'Profile',
-      path: '/profile',
-      icon: User,
-    },
-  ];
+  const currentPath = location.pathname;
 
   const isActive = (path: string) => {
-    return location.pathname === path;
+    if (path === '/' && currentPath === '/') return true;
+    if (path !== '/' && currentPath.startsWith(path)) return true;
+    return false;
   };
-  
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 border-t bg-background/90 backdrop-blur-sm z-50">
-      <div className="grid grid-cols-5 max-w-md mx-auto">
-        {navItems.map((item) => (
-          <Link
-            key={item.name}
-            to={item.path}
-            className={`nav-item p-3 ${isActive(item.path) ? 'active' : ''}`}
-          >
-            <item.icon size={20} className={`mb-1 ${isActive(item.path) ? 'text-primary' : ''}`} />
-            <span className={`${isActive(item.path) ? 'text-primary' : ''}`}>{item.name}</span>
-          </Link>
-        ))}
+    <nav className="fixed bottom-0 left-0 right-0 bg-background border-t z-50">
+      <div className="container mx-auto px-2">
+        <div className="h-16 flex items-center justify-between">
+          <div className="absolute top-0 left-4 transform -translate-y-1/2 bg-background p-2 rounded-full border shadow-sm">
+            <Logo />
+          </div>
+          <div className="flex justify-around items-center w-full">
+            <NavItem 
+              to="/" 
+              icon={<Home className={cn("h-5 w-5", isActive('/') ? "text-primary" : "text-muted-foreground")} />} 
+              label="Home"
+              active={isActive('/')}
+            />
+            <NavItem 
+              to="/recommendations" 
+              icon={<Compass className={cn("h-5 w-5", isActive('/recommendations') ? "text-primary" : "text-muted-foreground")} />} 
+              label="Explore"
+              active={isActive('/recommendations')}
+            />
+            <NavItem 
+              to="/map" 
+              icon={<Map className={cn("h-5 w-5", isActive('/map') ? "text-primary" : "text-muted-foreground")} />} 
+              label="Map"
+              active={isActive('/map')}
+            />
+            <NavItem 
+              to="/saved" 
+              icon={<Bookmark className={cn("h-5 w-5", isActive('/saved') ? "text-primary" : "text-muted-foreground")} />} 
+              label="Saved"
+              active={isActive('/saved')}
+            />
+            <NavItem 
+              to="/profile" 
+              icon={<User className={cn("h-5 w-5", isActive('/profile') ? "text-primary" : "text-muted-foreground")} />} 
+              label="Profile"
+              active={isActive('/profile')}
+            />
+          </div>
+        </div>
       </div>
-    </div>
+    </nav>
   );
 };
+
+interface NavItemProps {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+}
+
+const NavItem = ({ to, icon, label, active }: NavItemProps) => (
+  <Link 
+    to={to} 
+    className={cn(
+      "flex flex-col items-center justify-center w-16",
+      active ? "text-primary" : "text-muted-foreground"
+    )}
+  >
+    <div>{icon}</div>
+    <span className="text-xs mt-1">{label}</span>
+  </Link>
+);
 
 export default BottomNav;

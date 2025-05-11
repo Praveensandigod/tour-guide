@@ -12,7 +12,7 @@ import {
 import { useDestinations } from '@/contexts/DestinationContext';
 
 const RecommendationsPage = () => {
-  const { setSelectedBudget, getStatesList } = useDestinations();
+  const { getStatesList } = useDestinations();
   const [selectedState, setSelectedState] = useState('All States');
   
   // Get all states from destinations data
@@ -26,41 +26,21 @@ const RecommendationsPage = () => {
           <SearchBar />
         </div>
         
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="w-full md:w-1/2">
-            <label className="block text-sm font-medium mb-1">Filter by State</label>
-            <Select 
-              defaultValue="All States"
-              onValueChange={(value) => setSelectedState(value)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a state" />
-              </SelectTrigger>
-              <SelectContent>
-                {statesList.map(state => (
-                  <SelectItem key={state} value={state}>{state}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="w-full md:w-1/2">
-            <label className="block text-sm font-medium mb-1">Filter by Budget</label>
-            <Select 
-              defaultValue="all"
-              onValueChange={(value) => setSelectedBudget(value)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select budget" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Budgets</SelectItem>
-                <SelectItem value="low">Budget-Friendly</SelectItem>
-                <SelectItem value="medium">Mid-Range</SelectItem>
-                <SelectItem value="high">Luxury</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="w-full mb-6">
+          <label className="block text-sm font-medium mb-1">Filter by State</label>
+          <Select 
+            defaultValue="All States"
+            onValueChange={(value) => setSelectedState(value)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a state" />
+            </SelectTrigger>
+            <SelectContent>
+              {statesList.map(state => (
+                <SelectItem key={state} value={state}>{state}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         
         <DestinationGrid stateFilter={selectedState} />
