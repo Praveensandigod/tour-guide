@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapPin, ArrowRight, Volume2, VolumeX } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap } from '@react-google-maps/api';
 import ApiKeyInput from './ApiKeyInput';
 import { getGoogleMapsApiKey } from '@/config/apiConfig';
 import { useGoogleMapsApi } from '@/utils/googleMapsService';
@@ -44,12 +44,12 @@ const MapView = () => {
   // Initialize the map
   const onMapLoad = (map: google.maps.Map) => {
     mapRef.current = map;
-    placesServiceRef.current = new google.maps.places.PlacesService(map);
-    directionsServiceRef.current = new google.maps.DirectionsService();
+    placesServiceRef.current = new window.google.maps.places.PlacesService(map);
+    directionsServiceRef.current = new window.google.maps.DirectionsService();
     
     // Initialize DirectionsRenderer
     if (!directionsRendererRef.current) {
-      directionsRendererRef.current = new google.maps.DirectionsRenderer({
+      directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
         suppressMarkers: false,
         polylineOptions: {
           strokeColor: '#3887be',
