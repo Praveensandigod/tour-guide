@@ -1,14 +1,17 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapPin, ArrowRight, Volume2, VolumeX } from 'lucide-react';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
 import { useToast } from '@/components/ui/use-toast';
+import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import ApiKeyInput from './ApiKeyInput';
+import { getGoogleMapsApiKey } from '@/config/apiConfig';
+import { useGoogleMapsApi } from '@/utils/googleMapsService';
+import { debounce } from 'use-debounce';
 
 const MapView = () => {
   const { destinations } = useDestinations();
@@ -16,138 +19,68 @@ const MapView = () => {
   const location = useLocation();
   const selectedDestinationId = location.state?.destinationId || destinationId;
   const { toast } = useToast();
+
+  // Google Maps API key state
+  const [apiKey, setApiKey] = useState<string | null>(getGoogleMapsApiKey());
+  const { isLoaded, loadError } = useGoogleMapsApi(apiKey);
   
-  // Using a free Mapbox API token
-  const mapboxToken = 'pk.eyJ1IjoicHVibGljLXRva2VuLWRlbW8iLCJhIjoiY2xreWUyZHh1MGRrczNxcGRwZXhsZzBueiJ9.5Zv_ryn8-KmAT2LQQnLmkQ';
+  // Map elements
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
+  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
+  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
   
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
+  // Form states
   const [startLocation, setStartLocation] = useState('');
   const [endLocation, setEndLocation] = useState('');
   const [isDirectionMode, setIsDirectionMode] = useState(!!selectedDestinationId);
   const [isLoading, setIsLoading] = useState(false);
-  const [directionsData, setDirectionsData] = useState<any>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
+  const [selectedMarker, setSelectedMarker] = useState<any>(null);
   const [isSpeakingDirections, setIsSpeakingDirections] = useState(false);
   const speechSynthesis = window.speechSynthesis;
   const speechUtterance = useRef<SpeechSynthesisUtterance | null>(null);
   
-  useEffect(() => {
-    if (mapContainer.current && !map.current) {
-      const loadMap = async () => {
-        try {
-          mapboxgl.accessToken = mapboxToken;
-          
-          map.current = new mapboxgl.Map({
-            container: mapContainer.current!,
-            style: 'mapbox://styles/mapbox/streets-v11',
-            center: [78.9629, 20.5937], // Center on India
-            zoom: 3,
-          });
-          
-          map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-          
-          // Add destinations markers
-          map.current.on('load', () => {
-            setMapLoaded(true);
-            // Load destination markers
-            destinations.forEach(destination => {
-              const popup = new mapboxgl.Popup({ offset: 25 }).setText(
-                destination.name
-              );
-              
-              // Create a DOM element for the marker
-              const el = document.createElement('div');
-              el.className = 'custom-marker';
-              el.style.backgroundImage = 'url(https://img.icons8.com/color/48/marker--v1.png)';
-              el.style.width = '24px';
-              el.style.height = '24px';
-              el.style.backgroundSize = '100%';
-              el.style.cursor = 'pointer';
-              
-              new mapboxgl.Marker(el)
-                .setLngLat([destination.coordinates.lng, destination.coordinates.lat])
-                .setPopup(popup)
-                .addTo(map.current!);
-            });
-            
-            // If destination ID is provided, center map on that destination
-            if (selectedDestinationId) {
-              const destination = destinations.find(d => d.id === selectedDestinationId);
-              if (destination) {
-                map.current!.flyTo({
-                  center: [destination.coordinates.lng, destination.coordinates.lat],
-                  zoom: 10,
-                  essential: true
-                });
-                
-                setEndLocation(destination.name);
-              }
-            }
-          });
-        } catch (error) {
-          console.error("Error initializing map:", error);
-          toast({
-            title: "Map Error",
-            description: "There was a problem loading the map. Please try again.",
-            variant: "destructive"
-          });
+  // Initialize the map
+  const onMapLoad = (map: google.maps.Map) => {
+    mapRef.current = map;
+    placesServiceRef.current = new google.maps.places.PlacesService(map);
+    directionsServiceRef.current = new google.maps.DirectionsService();
+    
+    // Initialize DirectionsRenderer
+    if (!directionsRendererRef.current) {
+      directionsRendererRef.current = new google.maps.DirectionsRenderer({
+        suppressMarkers: false,
+        polylineOptions: {
+          strokeColor: '#3887be',
+          strokeWeight: 5,
+          strokeOpacity: 0.75
         }
-      };
-      
-      loadMap();
+      });
+      directionsRendererRef.current.setMap(map);
     }
     
-    return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
-      if (speechUtterance.current) {
-        speechSynthesis.cancel();
-      }
-    };
-  }, [destinations, selectedDestinationId, mapboxToken, toast]);
-  
-  const getCoordinatesFromPlace = async (placeName: string) => {
-    try {
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-          placeName
-        )}.json?access_token=${mapboxToken}&limit=1&country=in`
-      );
-      const data = await response.json();
-      
-      if (data.features && data.features.length > 0) {
-        return data.features[0].center;
-      }
-      return null;
-    } catch (error) {
-      console.error("Error getting coordinates:", error);
-      toast({
-        title: "Geocoding Error",
-        description: "Could not find the location you entered. Please try a different location.",
-        variant: "destructive"
+    // Add destination markers
+    destinations.forEach(destination => {
+      new google.maps.Marker({
+        position: { lat: destination.coordinates.lat, lng: destination.coordinates.lng },
+        map,
+        title: destination.name,
+        icon: {
+          url: 'https://img.icons8.com/color/48/marker--v1.png',
+          scaledSize: new window.google.maps.Size(24, 24)
+        }
       });
-      return null;
-    }
-  };
-  
-  const getDirections = async (start: [number, number], end: [number, number]) => {
-    try {
-      const response = await fetch(
-        `https://api.mapbox.com/directions/v5/mapbox/driving/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxToken}`
-      );
-      
-      return await response.json();
-    } catch (error) {
-      console.error("Error getting directions:", error);
-      toast({
-        title: "Directions Error",
-        description: "Could not get directions between these locations.",
-        variant: "destructive"
-      });
-      return null;
+    });
+    
+    // If destination ID is provided, center map on that destination
+    if (selectedDestinationId) {
+      const destination = destinations.find(d => d.id === selectedDestinationId);
+      if (destination) {
+        map.setCenter({ lat: destination.coordinates.lat, lng: destination.coordinates.lng });
+        map.setZoom(14);
+        setEndLocation(destination.name);
+      }
     }
   };
   
@@ -160,13 +93,50 @@ const MapView = () => {
       return;
     }
     
+    if (!directionsServiceRef.current || !placesServiceRef.current || !mapRef.current) {
+      toast({
+        title: "Map Not Ready",
+        description: "The map services are still loading. Please try again in a moment.",
+      });
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
-      const startCoords = await getCoordinatesFromPlace(startLocation);
-      const endCoords = await getCoordinatesFromPlace(endLocation);
+      const geocodeStartRequest = {
+        query: startLocation,
+        fields: ['name', 'geometry']
+      };
       
-      if (!startCoords || !endCoords) {
+      const geocodeEndRequest = {
+        query: endLocation,
+        fields: ['name', 'geometry']
+      };
+      
+      // Find start location
+      const startResults = await new Promise<google.maps.places.PlaceSearchRequest | null>((resolve, reject) => {
+        placesServiceRef.current!.findPlaceFromQuery(geocodeStartRequest, (results, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+            resolve(results[0]);
+          } else {
+            reject(new Error("Could not find start location"));
+          }
+        });
+      }).catch(() => null);
+      
+      // Find end location
+      const endResults = await new Promise<google.maps.places.PlaceSearchRequest | null>((resolve, reject) => {
+        placesServiceRef.current!.findPlaceFromQuery(geocodeEndRequest, (results, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+            resolve(results[0]);
+          } else {
+            reject(new Error("Could not find end location"));
+          }
+        });
+      }).catch(() => null);
+      
+      if (!startResults || !endResults) {
         toast({
           title: "Location Error",
           description: "Could not find one or both locations. Please try different locations.",
@@ -176,93 +146,41 @@ const MapView = () => {
         return;
       }
       
-      const directions = await getDirections(startCoords, endCoords);
-      setDirectionsData(directions);
-      
-      if (!directions || !directions.routes || directions.routes.length === 0) {
-        toast({
-          title: "No Routes Found",
-          description: "Could not find a route between these locations.",
-          variant: "destructive"
-        });
-        setIsLoading(false);
-        return;
-      }
-      
-      const route = directions.routes[0].geometry.coordinates;
-      
-      if (!mapLoaded || !map.current) {
-        toast({
-          title: "Map Not Ready",
-          description: "The map is still loading. Please try again in a moment.",
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      // Check if the source exists first
-      if (map.current.getSource('route')) {
-        // Use GeoJSONSource methods
-        const routeSource = map.current.getSource('route') as mapboxgl.GeoJSONSource;
-        routeSource.setData({
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: route
-          }
-        });
-      } else {
-        // First time we're adding the route, so we need to add a layer
-        map.current.addSource('route', {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            properties: {},
-            geometry: {
-              type: 'LineString',
-              coordinates: route
+      // Get directions
+      const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
+        directionsServiceRef.current!.route(
+          {
+            origin: startResults.geometry!.location!,
+            destination: endResults.geometry!.location!,
+            travelMode: google.maps.TravelMode.DRIVING
+          },
+          (result, status) => {
+            if (status === google.maps.DirectionsStatus.OK && result) {
+              resolve(result);
+            } else {
+              reject(new Error(`Directions request failed: ${status}`));
             }
           }
-        });
-        
-        map.current.addLayer({
-          id: 'route',
-          type: 'line',
-          source: 'route',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#3887be',
-            'line-width': 5,
-            'line-opacity': 0.75
-          }
-        });
+        );
+      });
+      
+      // Display the directions
+      setDirectionsResponse(result);
+      
+      if (directionsRendererRef.current) {
+        directionsRendererRef.current.setDirections(result);
       }
       
-      // Fit map to the route
-      const bounds = new mapboxgl.LngLatBounds(route[0], route[0]);
-      
-      route.forEach(point => {
-        bounds.extend(point as [number, number]);
-      });
-      
-      map.current.fitBounds(bounds, {
-        padding: 80
-      });
-
       toast({
         title: "Directions Found",
-        description: `Route found! Distance: ${(directions.routes[0].distance / 1000).toFixed(2)} km`,
+        description: `Route found! Distance: ${result.routes[0].legs[0].distance?.text}, Duration: ${result.routes[0].legs[0].duration?.text}`,
       });
       
     } catch (error) {
-      console.error("Error handling directions:", error);
+      console.error("Error calculating directions:", error);
       toast({
         title: "Direction Error",
-        description: "An error occurred while getting directions.",
+        description: "An error occurred while getting directions. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -271,7 +189,7 @@ const MapView = () => {
   };
   
   const speakDirections = () => {
-    if (!directionsData?.routes?.[0]?.legs?.[0]?.steps) {
+    if (!directionsResponse?.routes?.[0]?.legs?.[0]?.steps) {
       toast({
         title: "No Directions",
         description: "Please get directions first before using voice guidance.",
@@ -286,17 +204,16 @@ const MapView = () => {
       return;
     }
     
-    const steps = directionsData.routes[0].legs[0].steps;
-    const distance = (directionsData.routes[0].distance / 1000).toFixed(2);
-    const duration = Math.floor(directionsData.routes[0].duration / 60);
+    const steps = directionsResponse.routes[0].legs[0].steps;
+    const distance = directionsResponse.routes[0].legs[0].distance?.text;
+    const duration = directionsResponse.routes[0].legs[0].duration?.text;
     
     let directionsText = `Starting navigation from ${startLocation} to ${endLocation}. `;
-    directionsText += `Total distance is ${distance} kilometers and will take approximately ${duration} minutes. `;
+    directionsText += `Total distance is ${distance} and will take approximately ${duration}. `;
     
     // Add first 5 instructions to avoid too long speech
-    steps.slice(0, 5).forEach((step: any, index: number) => {
-      const distanceKm = (step.distance / 1000).toFixed(1);
-      directionsText += `Step ${index + 1}: ${step.maneuver.instruction} for ${distanceKm} kilometers. `;
+    steps.slice(0, 5).forEach((step, index) => {
+      directionsText += `Step ${index + 1}: ${step.instructions.replace(/<[^>]*>/g, '')} for ${step.distance?.text}. `;
     });
     
     if (steps.length > 5) {
@@ -328,10 +245,59 @@ const MapView = () => {
     speechSynthesis.speak(speechUtterance.current);
   };
   
+  // Handle API key updates
+  const handleApiKeySet = (key: string) => {
+    setApiKey(key);
+  };
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (speechUtterance.current) {
+        speechSynthesis.cancel();
+      }
+    };
+  }, []);
+  
+  // If API key is not set or map fails to load, show API input
+  if (!apiKey || loadError) {
+    return (
+      <div className="h-[80vh] w-full flex items-center justify-center p-4">
+        <ApiKeyInput onApiKeySet={handleApiKeySet} />
+      </div>
+    );
+  }
+
+  // Show loading state while Google Maps API is loading
+  if (!isLoaded) {
+    return (
+      <div className="h-[80vh] w-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p>Loading map...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[80vh] w-full relative">
-      <div ref={mapContainer} className="absolute top-0 left-0 right-0 bottom-0" />
+      {/* Google Map Component */}
+      <GoogleMap
+        mapContainerStyle={{ width: '100%', height: '100%' }}
+        center={{ lat: 20.5937, lng: 78.9629 }} // Center on India
+        zoom={5}
+        options={{
+          streetViewControl: false,
+          mapTypeControl: true,
+          fullscreenControl: true,
+        }}
+        onLoad={onMapLoad}
+      >
+        {/* Markers will be added in onMapLoad function */}
+      </GoogleMap>
       
+      {/* Directions Panel */}
       <Card className="absolute top-4 left-4 w-[320px] z-10 shadow-lg">
         <CardContent className="p-4">
           <div className="mb-2">
@@ -363,11 +329,11 @@ const MapView = () => {
             {!isLoading && <ArrowRight size={16} className="ml-2" />}
           </Button>
           
-          {directionsData && directionsData.routes && directionsData.routes.length > 0 && (
+          {directionsResponse && directionsResponse.routes && directionsResponse.routes.length > 0 && (
             <div className="mt-4">
               <div className="text-sm mb-2">
-                <p className="font-bold">Distance: {(directionsData.routes[0].distance / 1000).toFixed(2)} km</p>
-                <p className="font-bold">Duration: {Math.floor(directionsData.routes[0].duration / 60)} mins</p>
+                <p className="font-bold">Distance: {directionsResponse.routes[0].legs[0].distance?.text}</p>
+                <p className="font-bold">Duration: {directionsResponse.routes[0].legs[0].duration?.text}</p>
               </div>
               
               <Button 
