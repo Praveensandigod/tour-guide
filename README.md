@@ -1,8 +1,9 @@
 # Welcome to tour-guide project
-
 ## Project info
 
 **URL**: https://lovable.dev/projects/007f83da-000b-42c8-a709-539ebafbed12
+
+# How to run and clone the project?
 
 Follow these steps:
 
