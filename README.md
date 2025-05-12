@@ -1,4 +1,4 @@
-# Welcome to project
+# Welcome to tour-guide project
 
 ## Project info
 
