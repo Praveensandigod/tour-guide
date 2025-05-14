@@ -31,8 +31,18 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, Settings, User, Lock } from 'lucide-react';
+import { LogOut, Settings, User, Lock, Trash2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose
+} from "@/components/ui/dialog";
 
 const profileFormSchema = z.object({
   name: z.string().min(2, {
@@ -62,6 +72,7 @@ const ProfilePage = () => {
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
   const profileForm = useForm<z.infer<typeof profileFormSchema>>({
@@ -152,6 +163,41 @@ const ProfilePage = () => {
       navigate('/login');
     } catch (error) {
       console.error("Error during logout:", error);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeleting(true);
+      
+      // Delete user account from Supabase Auth
+      // Note: This will cascade delete the user's profile and data due to RLS policies
+      const { error } = await supabase.auth.admin.deleteUser(user?.id || '');
+      
+      if (error) {
+        // Fallback to client-side deletion if admin API fails
+        const { error: clientError } = await supabase.rpc('delete_user');
+        if (clientError) throw clientError;
+      }
+      
+      // Log the user out
+      await logout();
+      
+      toast({
+        title: "Account deleted",
+        description: "Your account has been permanently deleted.",
+      });
+      
+      navigate('/login');
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to delete account: " + (error?.message || "Unknown error"),
+        variant: "destructive"
+      });
+      console.error("Error deleting account:", error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -248,6 +294,23 @@ const ProfilePage = () => {
                 </Form>
               </CardContent>
             </Card>
+            
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Account Actions</CardTitle>
+                <CardDescription>Sign out of your account</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  variant="outline" 
+                  onClick={handleLogout}
+                  className="w-full"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
           
           {/* Security Tab */}
@@ -310,17 +373,46 @@ const ProfilePage = () => {
             <Card className="mt-6">
               <CardHeader>
                 <CardTitle className="text-destructive">Danger Zone</CardTitle>
-                <CardDescription>Logout or delete your account</CardDescription>
+                <CardDescription>Delete your account permanently</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button 
-                  variant="outline" 
-                  onClick={handleLogout}
-                  className="w-full"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign Out
-                </Button>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="destructive" 
+                      className="w-full"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Account
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Delete Account</DialogTitle>
+                      <DialogDescription>
+                        This action cannot be undone. This will permanently delete your account
+                        and remove all your data from our servers.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                      <p className="text-destructive font-semibold">
+                        Are you absolutely sure you want to delete your account?
+                      </p>
+                    </div>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                      </DialogClose>
+                      <Button 
+                        variant="destructive" 
+                        onClick={handleDeleteAccount}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardContent>
             </Card>
           </TabsContent>

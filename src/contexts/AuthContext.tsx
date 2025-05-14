@@ -13,6 +13,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   isAuthenticated: boolean;
+  deleteAccount: () => Promise<{ error?: AuthError }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -152,6 +153,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       console.log("Registering user:", email, name);
       
+      // Get the current site URL to use for verification redirects
+      const siteUrl = window.location.origin;
+      
       // Register the user with Supabase
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -159,7 +163,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         options: {
           data: {
             name // This will be available in user_metadata
-          }
+          },
+          emailRedirectTo: `${siteUrl}/login` // Redirect to login page after verification
         }
       });
       
@@ -170,8 +175,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       console.log("Registration response:", data);
       
-      // Unlike login, we won't automatically set the user here
-      // The user will need to verify their email first (if required)
+      // Check if email confirmation is required
+      if (data?.user?.identities && data.user.identities.length === 0) {
+        toast({
+          title: "Email already registered",
+          description: "This email address is already registered. Please log in instead.",
+          variant: "destructive"
+        });
+        
+        return { error: { message: "Email already registered", name: "EmailInUse" } as AuthError };
+      }
       
       return {};
     } catch (error: any) {
@@ -208,8 +221,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       setIsLoading(true);
       
+      const siteUrl = window.location.origin;
+      
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${siteUrl}/reset-password`,
       });
       
       if (error) throw error;
@@ -229,6 +244,38 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setIsLoading(false);
     }
   };
+  
+  const deleteAccount = async () => {
+    try {
+      setIsLoading(true);
+      
+      if (!user?.id) {
+        throw new Error("User not found");
+      }
+      
+      // Create a stored procedure in Supabase to handle user deletion
+      // First, delete the user's data from all tables (the cascade should handle this)
+      // Then, delete the user from the auth.users table
+      
+      // We'll use a custom RPC function to delete the user's data
+      const { error } = await supabase.rpc('delete_current_user');
+      
+      if (error) throw error;
+      
+      // Sign out after successful deletion
+      await supabase.auth.signOut();
+      
+      setUser(null);
+      setSession(null);
+      
+      return {};
+    } catch (error: any) {
+      console.error("Error deleting account:", error);
+      return { error: error as AuthError };
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const value = {
     user,
@@ -238,6 +285,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     logout,
     forgotPassword,
     isAuthenticated: !!user,
+    deleteAccount
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

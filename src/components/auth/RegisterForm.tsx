@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/components/ui/use-toast';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters long' }),
@@ -33,6 +35,7 @@ const RegisterForm = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -48,6 +51,7 @@ const RegisterForm = () => {
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
+      setSuccess(false);
       
       const result = await register(values.email, values.password, values.name);
       
@@ -55,12 +59,13 @@ const RegisterForm = () => {
         throw new Error(result.error.message);
       }
       
+      setSuccess(true);
       toast({
         title: "Registration successful",
         description: "Your account has been created. Please verify your email to continue.",
       });
       
-      navigate('/login');
+      // Stay on the page to show the verification message
     } catch (error: any) {
       setErrorMessage(error.message || "Failed to register. Please try again.");
       toast({
@@ -72,6 +77,35 @@ const RegisterForm = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (success) {
+    return (
+      <div className="flex justify-center items-center min-h-screen p-4 bg-muted/30">
+        <Card className="w-full max-w-md animate-fade-in">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold">Check your email</CardTitle>
+            <CardDescription>
+              We've sent a verification email to your inbox
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Verification required</AlertTitle>
+              <AlertDescription>
+                Please check your email inbox and click the verification link to activate your account.
+              </AlertDescription>
+            </Alert>
+            <div className="text-center">
+              <Button onClick={() => navigate('/login')} variant="outline">
+                Back to login
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex justify-center items-center min-h-screen p-4 bg-muted/30">
