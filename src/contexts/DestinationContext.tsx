@@ -1,9 +1,9 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Destination } from '@/types';
 import destinationsData from '@/data/destinations';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from './AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DestinationContextType {
   destinations: Destination[];
@@ -52,21 +52,15 @@ export const DestinationProvider = ({ children }: DestinationProviderProps) => {
   const [currentSearchQuery, setCurrentSearchQuery] = useState('');
   const [selectedBudget, setSelectedBudget] = useState('all');
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
-  // Load destinations and saved destinations on mount
+  // Load destinations on mount
   useEffect(() => {
     const loadDestinations = async () => {
       try {
-        // In a real app, this would be an API call
+        // In a real app, this would be an API call to Supabase
         // For demo, we're using static data
         setDestinations(destinationsData);
-        
-        // Load saved destinations from localStorage
-        const savedJSON = localStorage.getItem('journey_nexus_saved_destinations');
-        if (savedJSON) {
-          setSavedDestinations(JSON.parse(savedJSON));
-        }
       } catch (error) {
         console.error('Failed to load destinations:', error);
       } finally {
@@ -77,47 +71,121 @@ export const DestinationProvider = ({ children }: DestinationProviderProps) => {
     loadDestinations();
   }, []);
 
-  // Update localStorage when user changes
+  // Load saved destinations from Supabase when user changes
   useEffect(() => {
-    if (user?.email) {
-      // When user logs in, check if they have saved destinations in their account
-      const userSavedDestinations = localStorage.getItem(`journey_nexus_saved_destinations_${user.email}`);
-      if (userSavedDestinations) {
-        const parsedDestinations = JSON.parse(userSavedDestinations);
-        setSavedDestinations(parsedDestinations);
-        localStorage.setItem('journey_nexus_saved_destinations', userSavedDestinations);
+    const fetchSavedDestinations = async () => {
+      if (!user) {
+        setSavedDestinations([]);
+        return;
       }
-    }
-  }, [user]);
-
-  // Save to localStorage whenever savedDestinations changes
-  useEffect(() => {
-    if (savedDestinations.length > 0 || user?.email) {
-      localStorage.setItem('journey_nexus_saved_destinations', JSON.stringify(savedDestinations));
       
-      // If user is logged in, also save to their specific storage key
-      if (user?.email) {
-        localStorage.setItem(`journey_nexus_saved_destinations_${user.email}`, JSON.stringify(savedDestinations));
+      try {
+        setIsLoading(true);
+        
+        // Get user's saved destinations from Supabase
+        const { data, error } = await supabase
+          .from('user_destinations')
+          .select('destination_id')
+          .eq('user_id', user.id);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          // Map destination_ids to full destination objects
+          const savedIds = data.map(item => item.destination_id);
+          const saved = destinationsData.filter(dest => savedIds.includes(dest.id));
+          setSavedDestinations(saved);
+        } else {
+          setSavedDestinations([]);
+        }
+      } catch (error) {
+        console.error('Failed to load saved destinations:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load your saved destinations.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
       }
-    }
-  }, [savedDestinations, user]);
+    };
 
-  const saveDestination = (destination: Destination) => {
-    if (!isSaved(destination.id)) {
-      setSavedDestinations([...savedDestinations, destination]);
+    // Only fetch if user is authenticated
+    if (isAuthenticated) {
+      fetchSavedDestinations();
+    } else {
+      setSavedDestinations([]);
+    }
+  }, [user, isAuthenticated, toast]);
+
+  const saveDestination = async (destination: Destination) => {
+    if (!user) {
       toast({
-        title: "Destination saved",
-        description: `${destination.name} has been added to your saved list`,
+        title: "Authentication required",
+        description: "Please sign in to save destinations",
+        variant: "destructive"
       });
+      return;
+    }
+    
+    if (!isSaved(destination.id)) {
+      try {
+        // Save to Supabase
+        const { error } = await supabase
+          .from('user_destinations')
+          .insert({
+            user_id: user.id,
+            destination_id: destination.id
+          });
+        
+        if (error) throw error;
+        
+        // Update local state
+        setSavedDestinations(prev => [...prev, destination]);
+        
+        toast({
+          title: "Destination saved",
+          description: `${destination.name} has been added to your saved list`,
+        });
+      } catch (error) {
+        console.error('Failed to save destination:', error);
+        toast({
+          title: "Error",
+          description: "Failed to save destination.",
+          variant: "destructive"
+        });
+      }
     }
   };
 
-  const removeSavedDestination = (destinationId: string) => {
-    setSavedDestinations(savedDestinations.filter(dest => dest.id !== destinationId));
-    toast({
-      title: "Destination removed",
-      description: "The destination has been removed from your saved list",
-    });
+  const removeSavedDestination = async (destinationId: string) => {
+    if (!user) return;
+    
+    try {
+      // Remove from Supabase
+      const { error } = await supabase
+        .from('user_destinations')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('destination_id', destinationId);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setSavedDestinations(prev => prev.filter(dest => dest.id !== destinationId));
+      
+      toast({
+        title: "Destination removed",
+        description: "The destination has been removed from your saved list",
+      });
+    } catch (error) {
+      console.error('Failed to remove destination:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove destination.",
+        variant: "destructive"
+      });
+    }
   };
 
   const isSaved = (destinationId: string) => {

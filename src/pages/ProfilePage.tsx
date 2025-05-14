@@ -1,10 +1,11 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Card,
   CardContent,
@@ -31,6 +32,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LogOut, Settings, User, Lock } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 const profileFormSchema = z.object({
   name: z.string().min(2, {
@@ -60,6 +62,7 @@ const ProfilePage = () => {
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [isUpdating, setIsUpdating] = useState(false);
+  const { toast } = useToast();
 
   const profileForm = useForm<z.infer<typeof profileFormSchema>>({
     resolver: zodResolver(profileFormSchema),
@@ -78,28 +81,78 @@ const ProfilePage = () => {
     },
   });
 
+  useEffect(() => {
+    if (user) {
+      profileForm.reset({
+        name: user.name || '',
+        email: user.email || ''
+      });
+    }
+  }, [user, profileForm]);
+
   const onProfileSubmit = async (values: z.infer<typeof profileFormSchema>) => {
-    setIsUpdating(true);
-    // In a real app, this would be an API call
-    // For demo purposes, we just simulate the delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsUpdating(false);
-    alert('Profile updated successfully!');
+    try {
+      setIsUpdating(true);
+      
+      // Update profile in Supabase
+      const { error } = await supabase
+        .from('profiles')
+        .update({ name: values.name })
+        .eq('id', user?.id);
+        
+      if (error) throw error;
+      
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been updated successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update profile.",
+        variant: "destructive"
+      });
+      console.error("Error updating profile:", error);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const onPasswordSubmit = async (values: z.infer<typeof passwordFormSchema>) => {
-    setIsUpdating(true);
-    // In a real app, this would be an API call
-    // For demo purposes, we just simulate the delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsUpdating(false);
-    passwordForm.reset();
-    alert('Password updated successfully!');
+    try {
+      setIsUpdating(true);
+      
+      // Update password in Supabase
+      const { error } = await supabase.auth.updateUser({
+        password: values.newPassword
+      });
+      
+      if (error) throw error;
+      
+      passwordForm.reset();
+      toast({
+        title: "Password updated",
+        description: "Your password has been updated successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update password.",
+        variant: "destructive"
+      });
+      console.error("Error updating password:", error);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleLogout = async () => {
-    await logout();
-    navigate('/login');
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error("Error during logout:", error);
+    }
   };
 
   if (!isAuthenticated) {
@@ -182,7 +235,7 @@ const ProfilePage = () => {
                         <FormItem>
                           <FormLabel>Email</FormLabel>
                           <FormControl>
-                            <Input placeholder="Your email" {...field} />
+                            <Input placeholder="Your email" readOnly {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

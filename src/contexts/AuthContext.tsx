@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
@@ -27,57 +29,104 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Helper function to convert Supabase user to our app's User format
+const formatUser = (user: SupabaseUser | null, profileData: any = null): User | null => {
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    email: user.email || '',
+    name: profileData?.name || user.user_metadata?.name || '',
+    profileImage: profileData?.profile_image || user.user_metadata?.avatar_url || '',
+    createdAt: profileData?.created_at || user.created_at || new Date().toISOString()
+  };
+};
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   
+  // Setup auth state listener
   useEffect(() => {
-    // Check if user is stored in localStorage
-    const storedUser = localStorage.getItem('journey_nexus_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        setSession(currentSession);
+
+        if (currentSession?.user) {
+          // Use setTimeout to prevent potential deadlock
+          setTimeout(async () => {
+            try {
+              // Fetch user profile data
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', currentSession.user.id)
+                .single();
+              
+              setUser(formatUser(currentSession.user, profileData));
+            } catch (error) {
+              console.error("Error fetching user profile:", error);
+              setUser(formatUser(currentSession.user));
+            }
+          }, 0);
+        } else {
+          setUser(null);
+        }
+      }
+    );
+
+    // THEN check for existing session
+    const initializeAuth = async () => {
+      try {
+        setIsLoading(true);
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        
+        if (initialSession?.user) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', initialSession.user.id)
+            .single();
+          
+          setUser(formatUser(initialSession.user, profileData));
+        }
+        setSession(initialSession);
+      } catch (error) {
+        console.error("Error initializing auth:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
       
-      // In a real app, this would be an API call
-      // Simulating API call with timeout
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      // For demo purposes only - in a real app, this would be validated by the server
-      if (email === 'demo@example.com' && password === 'password') {
-        const user: User = {
-          id: '1',
-          email: email,
-          name: 'Demo User',
-          createdAt: new Date().toISOString()
-        };
-        
-        localStorage.setItem('journey_nexus_user', JSON.stringify(user));
-        
-        // Restore saved destinations for this user from their specific storage key
-        const userSavedDestinations = localStorage.getItem(`journey_nexus_saved_destinations_${email}`);
-        if (userSavedDestinations) {
-          localStorage.setItem('journey_nexus_saved_destinations', userSavedDestinations);
-        }
-        
-        setUser(user);
-        toast({
-          title: "Login successful",
-          description: "Welcome back! Your saved destinations have been restored.",
-        });
-      } else {
-        throw new Error('Invalid email or password');
-      }
-    } catch (error) {
+      if (error) throw error;
+      
+      toast({
+        title: "Login successful",
+        description: "Welcome back!",
+      });
+    } catch (error: any) {
       toast({
         title: "Login failed",
-        description: error instanceof Error ? error.message : "Something went wrong",
+        description: error.message || "Something went wrong",
         variant: "destructive"
       });
       throw error;
@@ -90,31 +139,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       setIsLoading(true);
       
-      // In a real app, this would be an API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const user: User = {
-        id: Math.random().toString(36).substr(2, 9),
+      // Register the user with Supabase
+      const { error, data } = await supabase.auth.signUp({
         email,
-        name,
-        createdAt: new Date().toISOString()
-      };
+        password,
+        options: {
+          data: {
+            name // This will be available in user_metadata
+          }
+        }
+      });
       
-      localStorage.setItem('journey_nexus_user', JSON.stringify(user));
+      if (error) throw error;
       
-      // Initialize empty saved destinations for new user
-      localStorage.setItem(`journey_nexus_saved_destinations_${email}`, JSON.stringify([]));
-      localStorage.setItem('journey_nexus_saved_destinations', JSON.stringify([]));
-      
-      setUser(user);
       toast({
         title: "Registration successful",
         description: "Your account has been created",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Registration failed",
-        description: error instanceof Error ? error.message : "Something went wrong",
+        description: error.message || "Something went wrong",
         variant: "destructive"
       });
       throw error;
@@ -124,42 +169,45 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const logout = async () => {
-    setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    if (user?.email) {
-      // Save current destinations to user-specific storage before logout
-      const currentDestinations = localStorage.getItem('journey_nexus_saved_destinations');
-      if (currentDestinations) {
-        localStorage.setItem(`journey_nexus_saved_destinations_${user.email}`, currentDestinations);
-      }
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Logged out",
+        description: "You have been logged out successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Logout failed",
+        description: error.message || "Something went wrong",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
-    
-    localStorage.removeItem('journey_nexus_user');
-    localStorage.removeItem('journey_nexus_saved_destinations');
-    setUser(null);
-    toast({
-      title: "Logged out",
-      description: "You have been logged out successfully",
-    });
-    setIsLoading(false);
   };
 
   const forgotPassword = async (email: string) => {
     try {
       setIsLoading(true);
       
-      // In a real app, this would be an API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      
+      if (error) throw error;
       
       toast({
         title: "Password reset link sent",
         description: `If ${email} exists in our database, you will receive a password reset link shortly.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Password reset failed",
-        description: error instanceof Error ? error.message : "Something went wrong",
+        description: error.message || "Something went wrong",
         variant: "destructive"
       });
       throw error;
@@ -175,7 +223,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     register,
     logout,
     forgotPassword,
-    isAuthenticated: user !== null,
+    isAuthenticated: !!user,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
