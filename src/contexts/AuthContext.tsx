@@ -3,13 +3,13 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { Session, User as SupabaseUser, AuthError } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ error?: AuthError }>;
+  register: (email: string, password: string, name: string) => Promise<{ error?: AuthError }>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   isAuthenticated: boolean;
@@ -67,6 +67,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
                 .single();
               
               setUser(formatUser(currentSession.user, profileData));
+              console.log("User authenticated:", currentSession.user.email);
             } catch (error) {
               console.error("Error fetching user profile:", error);
               setUser(formatUser(currentSession.user));
@@ -92,6 +93,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             .single();
           
           setUser(formatUser(initialSession.user, profileData));
+          console.log("Session initialized for:", initialSession.user.email);
         }
         setSession(initialSession);
       } catch (error) {
@@ -109,38 +111,49 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    
     try {
-      setIsLoading(true);
-      
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
-      if (error) throw error;
+      if (error) {
+        toast({
+          title: "Login failed",
+          description: error.message || "Something went wrong",
+          variant: "destructive"
+        });
+        return { error };
+      }
       
       toast({
         title: "Login successful",
         description: "Welcome back!",
       });
+      
+      return {};
     } catch (error: any) {
       toast({
         title: "Login failed",
         description: error.message || "Something went wrong",
         variant: "destructive"
       });
-      throw error;
+      return { error: error as AuthError };
     } finally {
       setIsLoading(false);
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
+    setIsLoading(true);
+    
     try {
-      setIsLoading(true);
+      console.log("Registering user:", email, name);
       
       // Register the user with Supabase
-      const { error, data } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -150,19 +163,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Registration error:", error);
+        return { error };
+      }
       
-      toast({
-        title: "Registration successful",
-        description: "Your account has been created",
-      });
+      console.log("Registration response:", data);
+      
+      // Unlike login, we won't automatically set the user here
+      // The user will need to verify their email first (if required)
+      
+      return {};
     } catch (error: any) {
-      toast({
-        title: "Registration failed",
-        description: error.message || "Something went wrong",
-        variant: "destructive"
-      });
-      throw error;
+      console.error("Registration exception:", error);
+      return { error: error as AuthError };
     } finally {
       setIsLoading(false);
     }

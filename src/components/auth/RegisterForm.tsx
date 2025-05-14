@@ -16,6 +16,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from '@/components/ui/use-toast';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters long' }),
@@ -31,6 +32,7 @@ const RegisterForm = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -45,10 +47,27 @@ const RegisterForm = () => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsSubmitting(true);
-      await register(values.email, values.password, values.name);
-      navigate('/');
-    } catch (error) {
-      // Error is handled in the auth context
+      setErrorMessage(null);
+      
+      const result = await register(values.email, values.password, values.name);
+      
+      if (result && result.error) {
+        throw new Error(result.error.message);
+      }
+      
+      toast({
+        title: "Registration successful",
+        description: "Your account has been created. Please verify your email to continue.",
+      });
+      
+      navigate('/login');
+    } catch (error: any) {
+      setErrorMessage(error.message || "Failed to register. Please try again.");
+      toast({
+        title: "Registration failed",
+        description: error.message || "Something went wrong",
+        variant: "destructive"
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -64,6 +83,11 @@ const RegisterForm = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {errorMessage && (
+            <div className="bg-destructive/15 text-destructive rounded-md p-3 mb-4">
+              {errorMessage}
+            </div>
+          )}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -86,7 +110,7 @@ const RegisterForm = () => {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter your email" {...field} />
+                      <Input placeholder="Enter your email" type="email" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
