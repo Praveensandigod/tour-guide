@@ -162,17 +162,25 @@ export const deleteUserAccount = async () => {
   try {
     // Instead of using RPC, let's delete the user directly
     // This is a workaround since we don't have the RPC function typed
+    
+    // First get the current user ID
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    
+    if (!userId) {
+      throw new Error("No authenticated user found");
+    }
+    
+    // Delete the user's profile
     const { error: profileError } = await supabase
       .from('profiles')
       .delete()
-      .eq('id', supabase.auth.getUser().then(({ data }) => data.user?.id));
+      .eq('id', userId);
     
     if (profileError) throw profileError;
     
     // Delete the user's auth account
-    const { error } = await supabase.auth.admin.deleteUser(
-      (await supabase.auth.getUser()).data.user?.id as string
-    ).catch(() => {
+    const { error } = await supabase.auth.admin.deleteUser(userId).catch(() => {
       // Fallback if admin API is not accessible
       return supabase.auth.signOut();
     });
