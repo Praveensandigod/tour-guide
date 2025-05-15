@@ -12,6 +12,7 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<{ error?: AuthError }>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (newPassword: string) => Promise<{ error?: AuthError }>;
   isAuthenticated: boolean;
   deleteAccount: () => Promise<{ error?: AuthError }>;
 }
@@ -60,6 +61,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           // Use setTimeout to prevent potential deadlock
           setTimeout(async () => {
             try {
+              // Check if this is a verification event
+              if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                const { data: userMetadata } = await supabase.auth.getUser();
+                
+                if (userMetadata?.user?.email_confirmed_at && !user?.email) {
+                  toast({
+                    title: "Email verified successfully",
+                    description: "Your email has been verified. Welcome!",
+                  });
+                }
+              }
+              
               // Fetch user profile data
               const { data: profileData } = await supabase
                 .from('profiles')
@@ -245,6 +258,41 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
   
+  const resetPassword = async (newPassword: string) => {
+    try {
+      setIsLoading(true);
+      
+      const { error } = await supabase.auth.updateUser({ 
+        password: newPassword 
+      });
+      
+      if (error) {
+        toast({
+          title: "Password reset failed",
+          description: error.message || "Something went wrong",
+          variant: "destructive"
+        });
+        return { error };
+      }
+      
+      toast({
+        title: "Password reset successful",
+        description: "Your password has been updated. Please log in with your new password.",
+      });
+      
+      return {};
+    } catch (error: any) {
+      toast({
+        title: "Password reset failed",
+        description: error.message || "Something went wrong",
+        variant: "destructive"
+      });
+      return { error: error as AuthError };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   const deleteAccount = async () => {
     try {
       setIsLoading(true);
@@ -284,6 +332,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     register,
     logout,
     forgotPassword,
+    resetPassword,
     isAuthenticated: !!user,
     deleteAccount
   };

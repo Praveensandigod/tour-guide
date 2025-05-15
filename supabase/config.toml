@@ -15,4 +15,9 @@ enabled = true
 [auth]
 enabled = true
 site_url = "http://localhost:5173"
-additional_redirect_urls = ["https://omobmgybzsdhtphvuaav.lovable.app"]
+additional_redirect_urls = [
+  "https://omobmgybzsdhtphvuaav.lovable.app", 
+  "https://omobmgybzsdhtphvuaav.lovable.app/reset-password", 
+  "http://localhost:5173/reset-password"
+]
+
