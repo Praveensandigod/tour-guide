@@ -14,9 +14,12 @@ enabled = true
 
 [auth]
 enabled = true
-site_url = "https://omobmgybzsdhtphvuaav.lovable.app"
+site_url = "http://localhost:8080"
 additional_redirect_urls = [
   "https://omobmgybzsdhtphvuaav.lovable.app", 
   "https://omobmgybzsdhtphvuaav.lovable.app/reset-password", 
-  "https://omobmgybzsdhtphvuaav.lovable.app/login"
+  "https://omobmgybzsdhtphvuaav.lovable.app/login",
+  "http://localhost:8080",
+  "http://localhost:8080/reset-password",
+  "http://localhost:8080/login"
 ]
