@@ -1,18 +1,9 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Session, User as SupabaseUser, AuthError } from '@supabase/supabase-js';
-import { formatUser } from '@/utils/authUtils';
-import {
-  loginWithEmailAndPassword,
-  registerWithEmailAndPassword,
-  logoutUser,
-  sendPasswordResetEmail,
-  resetUserPassword,
-  deleteUserAccount
-} from '@/services/authService';
 
 interface AuthContextType {
   user: User | null;
@@ -21,7 +12,6 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<{ error?: AuthError }>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
-  resetPassword: (newPassword: string) => Promise<{ error?: AuthError }>;
   isAuthenticated: boolean;
   deleteAccount: () => Promise<{ error?: AuthError }>;
 }
@@ -40,6 +30,19 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Helper function to convert Supabase user to our app's User format
+const formatUser = (user: SupabaseUser | null, profileData: any = null): User | null => {
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    email: user.email || '',
+    name: profileData?.name || user.user_metadata?.name || '',
+    profileImage: profileData?.profile_image || user.user_metadata?.avatar_url || '',
+    createdAt: profileData?.created_at || user.created_at || new Date().toISOString()
+  };
+};
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -57,18 +60,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           // Use setTimeout to prevent potential deadlock
           setTimeout(async () => {
             try {
-              // Check if this is a verification event
-              if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                const { data: userMetadata } = await supabase.auth.getUser();
-                
-                if (userMetadata?.user?.email_confirmed_at && !user?.email) {
-                  toast({
-                    title: "Email verified successfully",
-                    description: "Your email has been verified. Welcome!",
-                  });
-                }
-              }
-              
               // Fetch user profile data
               const { data: profileData } = await supabase
                 .from('profiles')
@@ -122,9 +113,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
+    
     try {
-      const result = await loginWithEmailAndPassword(email, password);
-      return result;
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (error) {
+        toast({
+          title: "Login failed",
+          description: error.message || "Something went wrong",
+          variant: "destructive"
+        });
+        return { error };
+      }
+      
+      toast({
+        title: "Login successful",
+        description: "Welcome back!",
+      });
+      
+      return {};
+    } catch (error: any) {
+      toast({
+        title: "Login failed",
+        description: error.message || "Something went wrong",
+        variant: "destructive"
+      });
+      return { error: error as AuthError };
     } finally {
       setIsLoading(false);
     }
@@ -132,45 +149,129 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const register = async (email: string, password: string, name: string) => {
     setIsLoading(true);
+    
     try {
-      const result = await registerWithEmailAndPassword(email, password, name);
-      return result;
+      console.log("Registering user:", email, name);
+      
+      // Get the current site URL to use for verification redirects
+      const siteUrl = window.location.origin;
+      
+      // Register the user with Supabase
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name // This will be available in user_metadata
+          },
+          emailRedirectTo: `${siteUrl}/login` // Redirect to login page after verification
+        }
+      });
+      
+      if (error) {
+        console.error("Registration error:", error);
+        return { error };
+      }
+      
+      console.log("Registration response:", data);
+      
+      // Check if email confirmation is required
+      if (data?.user?.identities && data.user.identities.length === 0) {
+        toast({
+          title: "Email already registered",
+          description: "This email address is already registered. Please log in instead.",
+          variant: "destructive"
+        });
+        
+        return { error: { message: "Email already registered", name: "EmailInUse" } as AuthError };
+      }
+      
+      return {};
+    } catch (error: any) {
+      console.error("Registration exception:", error);
+      return { error: error as AuthError };
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = async () => {
-    setIsLoading(true);
     try {
-      await logoutUser();
+      setIsLoading(true);
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Logged out",
+        description: "You have been logged out successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Logout failed",
+        description: error.message || "Something went wrong",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const forgotPassword = async (email: string) => {
-    setIsLoading(true);
     try {
-      await sendPasswordResetEmail(email);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const resetPassword = async (newPassword: string) => {
-    setIsLoading(true);
-    try {
-      return await resetUserPassword(newPassword);
+      setIsLoading(true);
+      
+      const siteUrl = window.location.origin;
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${siteUrl}/reset-password`,
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Password reset link sent",
+        description: `If ${email} exists in our database, you will receive a password reset link shortly.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Password reset failed",
+        description: error.message || "Something went wrong",
+        variant: "destructive"
+      });
+      throw error;
     } finally {
       setIsLoading(false);
     }
   };
   
   const deleteAccount = async () => {
-    setIsLoading(true);
     try {
-      return await deleteUserAccount();
+      setIsLoading(true);
+      
+      if (!user?.id) {
+        throw new Error("User not found");
+      }
+      
+      // Create a stored procedure in Supabase to handle user deletion
+      // First, delete the user's data from all tables (the cascade should handle this)
+      // Then, delete the user from the auth.users table
+      
+      // We'll use a custom RPC function to delete the user's data
+      const { error } = await supabase.rpc('delete_current_user');
+      
+      if (error) throw error;
+      
+      // Sign out after successful deletion
+      await supabase.auth.signOut();
+      
+      setUser(null);
+      setSession(null);
+      
+      return {};
+    } catch (error: any) {
+      console.error("Error deleting account:", error);
+      return { error: error as AuthError };
     } finally {
       setIsLoading(false);
     }
@@ -183,7 +284,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     register,
     logout,
     forgotPassword,
-    resetPassword,
     isAuthenticated: !!user,
     deleteAccount
   };
