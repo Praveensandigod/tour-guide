@@ -1,8 +1,7 @@
-
 import { useState, useEffect, useCallback } from 'react';
 
 // Create a service to load Google Maps script
-export const useGoogleMapsApi = (apiKey: string | null) => {
+export const useGoogleMapsApi = (apiKey: string) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<Error | null>(null);
 

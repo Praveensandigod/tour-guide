@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
@@ -58,18 +59,22 @@ const MapView = () => {
       directionsRendererRef.current.setMap(map);
     }
     
-    // Add destination markers
-    destinations.forEach(destination => {
-      new window.google.maps.Marker({
-        position: { lat: destination.coordinates.lat, lng: destination.coordinates.lng },
-        map,
-        title: destination.name,
-        icon: {
-          url: 'https://img.icons8.com/color/48/marker--v1.png',
-          scaledSize: new window.google.maps.Size(24, 24)
+    // Add destination markers if available
+    if (destinations && destinations.length > 0) {
+      destinations.forEach(destination => {
+        if (destination.coordinates) {
+          new window.google.maps.Marker({
+            position: { lat: destination.coordinates.lat, lng: destination.coordinates.lng },
+            map,
+            title: destination.name,
+            icon: {
+              url: 'https://img.icons8.com/color/48/marker--v1.png',
+              scaledSize: new window.google.maps.Size(24, 24)
+            }
+          });
         }
       });
-    });
+    }
     
     // If destination ID is provided, center map on that destination
     if (selectedDestinationId) {

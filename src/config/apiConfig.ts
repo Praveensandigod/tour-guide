@@ -4,8 +4,8 @@
 // and accessed through an authenticated API endpoint
 
 // Configuration for Google Maps API
-export const getGoogleMapsApiKey = (): string | null => {
-  // For development, we're using a hardcoded API key
+export const getGoogleMapsApiKey = (): string => {
+  // Return the API key directly
   return "pk.c6d6c51883fc4479d4c42fd1ff821586";
 };
 

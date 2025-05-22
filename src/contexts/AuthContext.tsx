@@ -182,7 +182,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           variant: "destructive"
         });
         
-        return { error: { message: "Email already registered", name: "EmailInUse" } as AuthError };
+        return { error: { message: "Email already registered", name: "EmailInUse" } as unknown as AuthError };
       }
       
       return {};
