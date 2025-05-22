@@ -121,26 +121,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       });
       
       if (error) {
-        toast({
-          title: "Login failed",
-          description: error.message || "Something went wrong",
-          variant: "destructive"
-        });
+        console.error("Login error:", error.message);
         return { error };
       }
       
-      toast({
-        title: "Login successful",
-        description: "Welcome back!",
-      });
-      
+      // Success toast is shown after redirect to avoid flashing
       return {};
     } catch (error: any) {
-      toast({
-        title: "Login failed",
-        description: error.message || "Something went wrong",
-        variant: "destructive"
-      });
+      console.error("Login exception:", error);
       return { error: error as AuthError };
     } finally {
       setIsLoading(false);

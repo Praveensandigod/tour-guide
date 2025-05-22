@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,16 +15,25 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
+
+const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{6,}$/;
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters long' }),
+  password: z.string()
+    .min(6, { message: 'Password must be at least 6 characters long' })
+    .regex(passwordRegex, { 
+      message: 'Password must contain at least one letter, one number, and one special character' 
+    }),
 });
 
 const LoginForm = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -38,10 +46,21 @@ const LoginForm = () => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsSubmitting(true);
-      await login(values.email, values.password);
-      navigate('/');
-    } catch (error) {
-      // Error is handled in the auth context
+      setAuthError(null);
+      const { error } = await login(values.email, values.password);
+      
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          setAuthError('Incorrect email or password. Please try again.');
+        } else {
+          setAuthError(error.message || 'An error occurred during login');
+        }
+        // Don't navigate - keep user on login page
+      } else {
+        navigate('/'); // Only navigate on successful login
+      }
+    } catch (error: any) {
+      setAuthError(error.message || 'An unexpected error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -57,6 +76,12 @@ const LoginForm = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {authError && (
+            <Alert variant="destructive" className="mb-4">
+              <ExclamationTriangleIcon className="h-4 w-4 mr-2" />
+              <AlertDescription>{authError}</AlertDescription>
+            </Alert>
+          )}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -106,7 +131,7 @@ const LoginForm = () => {
           <div className="text-center text-xs text-muted-foreground">
             <p>For demo purposes, use:</p>
             <p>Email: demo@example.com</p>
-            <p>Password: password</p>
+            <p>Password: Password123!</p>
           </div>
         </CardFooter>
       </Card>
