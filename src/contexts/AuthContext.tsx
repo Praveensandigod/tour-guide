@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
@@ -257,7 +256,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // First, delete the user's data from all tables (the cascade should handle this)
       // Then, delete the user from the auth.users table
       
-      // We'll use a custom RPC function to delete the user's data
+      // We'll use a custom RPC function to delete the current user
       const { error } = await supabase.rpc('delete_current_user');
       
       if (error) throw error;

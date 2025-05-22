@@ -5,12 +5,8 @@
 
 // Configuration for Google Maps API
 export const getGoogleMapsApiKey = (): string | null => {
-  // For development, you can hardcode the API key here
-  // For production, this should be retrieved securely from your backend
-  // return "YOUR_GOOGLE_MAPS_API_KEY";
-  
-  // For now, let's use localStorage as a temporary solution
-  return localStorage.getItem('googleMapsApiKey');
+  // For development, we're using a hardcoded API key
+  return "pk.c6d6c51883fc4479d4c42fd1ff821586";
 };
 
 // Function to securely set the API key (temporary solution)

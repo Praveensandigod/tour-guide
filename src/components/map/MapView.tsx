@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
@@ -8,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { MapPin, ArrowRight, Volume2, VolumeX } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { GoogleMap } from '@react-google-maps/api';
-import ApiKeyInput from './ApiKeyInput';
 import { getGoogleMapsApiKey } from '@/config/apiConfig';
 import { useGoogleMapsApi } from '@/utils/googleMapsService';
 import { useDebounce } from 'use-debounce';
@@ -21,7 +19,7 @@ const MapView = () => {
   const { toast } = useToast();
 
   // Google Maps API key state
-  const [apiKey, setApiKey] = useState<string | null>(getGoogleMapsApiKey());
+  const apiKey = getGoogleMapsApiKey();
   const { isLoaded, loadError } = useGoogleMapsApi(apiKey);
   
   // Map elements
@@ -245,11 +243,6 @@ const MapView = () => {
     speechSynthesis.speak(speechUtterance.current);
   };
   
-  // Handle API key updates
-  const handleApiKeySet = (key: string) => {
-    setApiKey(key);
-  };
-  
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -259,15 +252,6 @@ const MapView = () => {
     };
   }, []);
   
-  // If API key is not set or map fails to load, show API input
-  if (!apiKey || loadError) {
-    return (
-      <div className="h-[80vh] w-full flex items-center justify-center p-4">
-        <ApiKeyInput onApiKeySet={handleApiKeySet} />
-      </div>
-    );
-  }
-
   // Show loading state while Google Maps API is loading
   if (!isLoaded) {
     return (
@@ -276,6 +260,24 @@ const MapView = () => {
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p>Loading map...</p>
         </div>
+      </div>
+    );
+  }
+
+  // Show error message if Google Maps API fails to load
+  if (loadError) {
+    return (
+      <div className="h-[80vh] w-full flex items-center justify-center p-4">
+        <Card className="w-full max-w-md mx-auto">
+          <CardContent className="p-4">
+            <p className="text-center text-destructive">
+              Failed to load Google Maps. Please try again later.
+            </p>
+            <p className="text-center text-sm text-muted-foreground mt-2">
+              Error: {loadError.message}
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
