@@ -15,6 +15,7 @@ import { useDebounce } from 'use-debounce';
 interface LeafletMap {
   setView: (coords: [number, number], zoom: number) => void;
   remove: () => void;
+  fitBounds: (bounds: any, options?: any) => void;
 }
 
 const MapView = () => {
