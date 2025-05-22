@@ -1,5 +1,4 @@
 
-import React from 'react';
 import MapView from '@/components/map/MapView';
 import { useLocation } from 'react-router-dom';
 import { useEffect } from 'react';

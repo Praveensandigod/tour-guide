@@ -1,278 +1,192 @@
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useToast } from "@/components/ui/use-toast";
-import { AuthError, AuthResponse } from '@supabase/supabase-js';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User } from '@/types';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { Session, User as SupabaseUser, AuthError } from '@supabase/supabase-js';
+import { formatUser } from '@/utils/authUtils';
+import {
+  loginWithEmailAndPassword,
+  registerWithEmailAndPassword,
+  logoutUser,
+  sendPasswordResetEmail,
+  resetUserPassword,
+  deleteUserAccount
+} from '@/services/authService';
 
 interface AuthContextType {
-  user: any | null;
+  user: User | null;
   isLoading: boolean;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<AuthResponse>;
-  register: (email: string, password: string, username: string) => Promise<AuthResponse>;
+  login: (email: string, password: string) => Promise<{ error?: AuthError }>;
+  register: (email: string, password: string, name: string) => Promise<{ error?: AuthError }>;
   logout: () => Promise<void>;
-  updateUser: () => Promise<void>;
-  forgotPassword: (email: string) => Promise<{ data: any; error: Error | null }>;
-  deleteAccount: () => Promise<{ error?: Error }>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (newPassword: string) => Promise<{ error?: AuthError }>;
+  isAuthenticated: boolean;
+  deleteAccount: () => Promise<{ error?: AuthError }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<any | null>(null);
+export const AuthProvider = ({ children }: AuthProviderProps) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const navigate = useNavigate();
   const { toast } = useToast();
-
+  
+  // Setup auth state listener
   useEffect(() => {
-    const session = supabase.auth.getSession();
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        setSession(currentSession);
 
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setIsLoading(false);
-    });
-  }, []);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      setIsLoading(true);
-      const { data: { user }, error } = await supabase.auth.getUser();
-
-      if (error) {
-        console.error("Error fetching user:", error);
-        setUser(null);
-      } else {
-        setUser(user);
+        if (currentSession?.user) {
+          // Use setTimeout to prevent potential deadlock
+          setTimeout(async () => {
+            try {
+              // Check if this is a verification event
+              if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                const { data: userMetadata } = await supabase.auth.getUser();
+                
+                if (userMetadata?.user?.email_confirmed_at && !user?.email) {
+                  toast({
+                    title: "Email verified successfully",
+                    description: "Your email has been verified. Welcome!",
+                  });
+                }
+              }
+              
+              // Fetch user profile data
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', currentSession.user.id)
+                .single();
+              
+              setUser(formatUser(currentSession.user, profileData));
+              console.log("User authenticated:", currentSession.user.email);
+            } catch (error) {
+              console.error("Error fetching user profile:", error);
+              setUser(formatUser(currentSession.user));
+            }
+          }, 0);
+        } else {
+          setUser(null);
+        }
       }
-      setIsLoading(false);
+    );
+
+    // THEN check for existing session
+    const initializeAuth = async () => {
+      try {
+        setIsLoading(true);
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        
+        if (initialSession?.user) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', initialSession.user.id)
+            .single();
+          
+          setUser(formatUser(initialSession.user, profileData));
+          console.log("Session initialized for:", initialSession.user.email);
+        }
+        setSession(initialSession);
+      } catch (error) {
+        console.error("Error initializing auth:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    fetchUser();
+    initializeAuth();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const login = async (email: string, password: string): Promise<AuthResponse> => {
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        toast({
-          title: "Login Failed",
-          description: error.message,
-          variant: "destructive"
-        });
-        return { data: { user: null, session: null }, error };
-      }
-
-      setUser(data.user);
-      navigate('/');
-      toast({
-        title: "Login Successful",
-        description: "You have successfully logged in.",
-      });
-      return { data, error: null as unknown as AuthError };
-    } catch (error: any) {
-      toast({
-        title: "Login Failed",
-        description: error.message,
-        variant: "destructive"
-      });
-      return { data: { user: null, session: null }, error };
+      const result = await loginWithEmailAndPassword(email, password);
+      return result;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const register = async (email: string, password: string, username: string): Promise<AuthResponse> => {
+  const register = async (email: string, password: string, name: string) => {
     setIsLoading(true);
     try {
-      // Validate inputs
-      if (!email || !password || !username) {
-        toast({
-          title: "Registration Failed",
-          description: "Please fill in all fields.",
-          variant: "destructive"
-        });
-        return { 
-          data: { user: null, session: null }, 
-          error: { message: "Please fill in all fields.", name: "MissingFields" } as unknown as AuthError 
-        };
-      }
-      
-      // Check password length
-      if (password.length < 6) {
-        toast({
-          title: "Registration Failed",
-          description: "Password must be at least 6 characters long.",
-          variant: "destructive"
-        });
-        return { 
-          data: { user: null, session: null }, 
-          error: { message: "Password must be at least 6 characters long.", name: "PasswordTooShort" } as unknown as AuthError 
-        };
-      }
-      
-      // Check if the email is already registered
-      const { data: existingUsers } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', email);
-        
-      if (existingUsers && existingUsers.length > 0) {
-        toast({
-          title: "Registration Failed",
-          description: "Email already registered",
-          variant: "destructive"
-        });
-        
-        return { 
-          data: { user: null, session: null }, 
-          error: { message: "Email already registered", name: "EmailInUse" } as unknown as AuthError 
-        };
-      }
-      
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            username,
-            email,
-          }
-        }
-      });
-
-      if (error) {
-        toast({
-          title: "Registration Failed",
-          description: error.message,
-          variant: "destructive"
-        });
-        return { data: { user: null, session: null }, error };
-      }
-
-      setUser(data.user);
-      navigate('/');
-      toast({
-        title: "Registration Successful",
-        description: "Please check your email to verify your account.",
-      });
-      return { data, error: null as unknown as AuthError };
-    } catch (error: any) {
-      toast({
-        title: "Registration Failed",
-        description: error.message,
-        variant: "destructive"
-      });
-      return { data: { user: null, session: null }, error };
+      const result = await registerWithEmailAndPassword(email, password, name);
+      return result;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const forgotPassword = async (email: string): Promise<{ data: any; error: Error | null }> => {
-    try {
-      const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/reset-password',
-      });
-
-      if (error) {
-        return { data: null, error };
-      }
-
-      return { data, error: null };
-    } catch (error: any) {
-      return { data: null, error };
-    }
-  };
-
-  const deleteAccount = async (): Promise<{ error?: Error }> => {
-    try {
-      // Delete user data first (if needed)
-      // const { error: dataError } = await supabase.from('user_data').delete().eq('user_id', user.id);
-      // if (dataError) throw dataError;
-
-      // Now delete the actual account
-      const { error } = await supabase.auth.admin.deleteUser(user.id);
-      if (error) throw error;
-
-      setUser(null);
-      navigate('/');
-      return {};
-    } catch (error: any) {
-      console.error("Error deleting account:", error);
-      return { error };
-    }
-  };
-
-  const logout = async (): Promise<void> => {
+  const logout = async () => {
     setIsLoading(true);
     try {
-      await supabase.auth.signOut();
-      setUser(null);
-      navigate('/login');
-      toast({
-        title: "Logout Successful",
-        description: "You have successfully logged out.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Logout Failed",
-        description: error.message,
-        variant: "destructive"
-      });
+      await logoutUser();
     } finally {
       setIsLoading(false);
     }
   };
 
-  const updateUser = async (): Promise<void> => {
+  const forgotPassword = async (email: string) => {
     setIsLoading(true);
     try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error) {
-        console.error("Error fetching user:", error);
-      } else {
-        setUser(user);
-      }
-    } catch (error: any) {
-      console.error("Error updating user:", error);
+      await sendPasswordResetEmail(email);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const resetPassword = async (newPassword: string) => {
+    setIsLoading(true);
+    try {
+      return await resetUserPassword(newPassword);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const deleteAccount = async () => {
+    setIsLoading(true);
+    try {
+      return await deleteUserAccount();
     } finally {
       setIsLoading(false);
     }
   };
 
-  const value: AuthContextType = {
+  const value = {
     user,
     isLoading,
-    isAuthenticated: !!user,
     login,
     register,
     logout,
-    updateUser,
     forgotPassword,
-    deleteAccount,
+    resetPassword,
+    isAuthenticated: !!user,
+    deleteAccount
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

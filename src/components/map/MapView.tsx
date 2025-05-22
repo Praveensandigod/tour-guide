@@ -7,16 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapPin, ArrowRight, Volume2, VolumeX } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { getMapsApiKey } from '@/config/apiConfig';
-import { useLocationIqApi, getCoordinatesFromPlace, getDirections } from '@/utils/locationIqService';
+import { GoogleMap } from '@react-google-maps/api';
+import ApiKeyInput from './ApiKeyInput';
+import { getGoogleMapsApiKey } from '@/config/apiConfig';
+import { useGoogleMapsApi } from '@/utils/googleMapsService';
 import { useDebounce } from 'use-debounce';
-
-// Define type for our map
-interface LeafletMap {
-  setView: (coords: [number, number], zoom: number) => void;
-  remove: () => void;
-  fitBounds: (bounds: any, options?: any) => void;
-}
 
 const MapView = () => {
   const { destinations } = useDestinations();
@@ -25,91 +20,69 @@ const MapView = () => {
   const selectedDestinationId = location.state?.destinationId || destinationId;
   const { toast } = useToast();
 
-  // Maps API key state
-  const apiKey = getMapsApiKey();
-  const { isLoaded, loadError } = useLocationIqApi(apiKey);
+  // Google Maps API key state
+  const [apiKey, setApiKey] = useState<string | null>(getGoogleMapsApiKey());
+  const { isLoaded, loadError } = useGoogleMapsApi(apiKey);
   
   // Map elements
-  const mapRef = useRef<LeafletMap | null>(null);
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const markersRef = useRef<any[]>([]);
-  const routeLayerRef = useRef<any>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
+  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
+  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
   
   // Form states
   const [startLocation, setStartLocation] = useState('');
   const [endLocation, setEndLocation] = useState('');
   const [isDirectionMode, setIsDirectionMode] = useState(!!selectedDestinationId);
   const [isLoading, setIsLoading] = useState(false);
-  const [directionsResponse, setDirectionsResponse] = useState<any | null>(null);
+  const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<any>(null);
   const [isSpeakingDirections, setIsSpeakingDirections] = useState(false);
   const speechSynthesis = window.speechSynthesis;
   const speechUtterance = useRef<SpeechSynthesisUtterance | null>(null);
   
   // Initialize the map
-  useEffect(() => {
-    if (!isLoaded || !mapContainerRef.current) return;
-
-    try {
-      // @ts-ignore - Leaflet types are not fully defined
-      const L = window.L;
-      if (!L) {
-        console.error("Leaflet not loaded");
-        return;
-      }
-
-      // Initialize map
-      if (!mapRef.current) {
-        const map = L.map(mapContainerRef.current).setView([20.5937, 78.9629], 5);
-        
-        L.tileLayer('https://{s}-tiles.locationiq.com/v3/streets/r/{z}/{x}/{y}.png?key={apikey}', {
-          attribution: '© LocationIQ | © OpenStreetMap Contributors',
-          apikey: apiKey,
-          maxZoom: 18
-        }).addTo(map);
-        
-        mapRef.current = map;
-        
-        // Add destination markers if available
-        if (destinations && destinations.length > 0) {
-          destinations.forEach(destination => {
-            if (destination.coordinates) {
-              const marker = L.marker([destination.coordinates.lat, destination.coordinates.lng], {
-                title: destination.name
-              }).addTo(map);
-              
-              marker.bindPopup(`<b>${destination.name}</b>`);
-              markersRef.current.push(marker);
-            }
-          });
+  const onMapLoad = (map: google.maps.Map) => {
+    mapRef.current = map;
+    placesServiceRef.current = new window.google.maps.places.PlacesService(map);
+    directionsServiceRef.current = new window.google.maps.DirectionsService();
+    
+    // Initialize DirectionsRenderer
+    if (!directionsRendererRef.current) {
+      directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+        suppressMarkers: false,
+        polylineOptions: {
+          strokeColor: '#3887be',
+          strokeWeight: 5,
+          strokeOpacity: 0.75
         }
-        
-        // If destination ID is provided, center map on that destination
-        if (selectedDestinationId) {
-          const destination = destinations?.find(d => d.id === selectedDestinationId);
-          if (destination && destination.coordinates) {
-            map.setView([destination.coordinates.lat, destination.coordinates.lng], 14);
-            setEndLocation(destination.name);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error initializing map:", error);
-      toast({
-        title: "Map Error",
-        description: "Failed to initialize the map. Please try again.",
-        variant: "destructive"
       });
+      directionsRendererRef.current.setMap(map);
     }
     
-    return () => {
-      // Clean up map when component unmounts
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
+    // Add destination markers
+    destinations.forEach(destination => {
+      new window.google.maps.Marker({
+        position: { lat: destination.coordinates.lat, lng: destination.coordinates.lng },
+        map,
+        title: destination.name,
+        icon: {
+          url: 'https://img.icons8.com/color/48/marker--v1.png',
+          scaledSize: new window.google.maps.Size(24, 24)
+        }
+      });
+    });
+    
+    // If destination ID is provided, center map on that destination
+    if (selectedDestinationId) {
+      const destination = destinations.find(d => d.id === selectedDestinationId);
+      if (destination) {
+        map.setCenter({ lat: destination.coordinates.lat, lng: destination.coordinates.lng });
+        map.setZoom(14);
+        setEndLocation(destination.name);
       }
-    };
-  }, [isLoaded, apiKey, destinations, selectedDestinationId, toast]);
+    }
+  };
   
   const handleDirections = async () => {
     if (!startLocation || !endLocation) {
@@ -120,7 +93,7 @@ const MapView = () => {
       return;
     }
     
-    if (!mapRef.current) {
+    if (!directionsServiceRef.current || !placesServiceRef.current || !mapRef.current) {
       toast({
         title: "Map Not Ready",
         description: "The map services are still loading. Please try again in a moment.",
@@ -131,11 +104,39 @@ const MapView = () => {
     setIsLoading(true);
     
     try {
-      // Get coordinates for start and end locations
-      const startCoords = await getCoordinatesFromPlace(startLocation, apiKey);
-      const endCoords = await getCoordinatesFromPlace(endLocation, apiKey);
+      const geocodeStartRequest = {
+        query: startLocation,
+        fields: ['name', 'geometry']
+      };
       
-      if (!startCoords || !endCoords) {
+      const geocodeEndRequest = {
+        query: endLocation,
+        fields: ['name', 'geometry']
+      };
+      
+      // Find start location
+      const startResults = await new Promise<google.maps.places.PlaceSearchRequest | null>((resolve, reject) => {
+        placesServiceRef.current!.findPlaceFromQuery(geocodeStartRequest, (results, status) => {
+          if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+            resolve(results[0]);
+          } else {
+            reject(new Error("Could not find start location"));
+          }
+        });
+      }).catch(() => null);
+      
+      // Find end location
+      const endResults = await new Promise<google.maps.places.PlaceSearchRequest | null>((resolve, reject) => {
+        placesServiceRef.current!.findPlaceFromQuery(geocodeEndRequest, (results, status) => {
+          if (status === window.google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+            resolve(results[0]);
+          } else {
+            reject(new Error("Could not find end location"));
+          }
+        });
+      }).catch(() => null);
+      
+      if (!startResults || !endResults) {
         toast({
           title: "Location Error",
           description: "Could not find one or both locations. Please try different locations.",
@@ -146,49 +147,33 @@ const MapView = () => {
       }
       
       // Get directions
-      const result = await getDirections(startCoords, endCoords, apiKey);
-      
-      if (!result || !result.routes || result.routes.length === 0) {
-        toast({
-          title: "Direction Error",
-          description: "Could not find a route between these locations. Please try different locations.",
-          variant: "destructive"
-        });
-        setIsLoading(false);
-        return;
-      }
+      const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
+        directionsServiceRef.current!.route(
+          {
+            origin: startResults.geometry!.location!,
+            destination: endResults.geometry!.location!,
+            travelMode: window.google.maps.TravelMode.DRIVING
+          },
+          (result, status) => {
+            if (status === window.google.maps.DirectionsStatus.OK && result) {
+              resolve(result);
+            } else {
+              reject(new Error(`Directions request failed: ${status}`));
+            }
+          }
+        );
+      });
       
       // Display the directions
       setDirectionsResponse(result);
       
-      // @ts-ignore - Leaflet types are not fully defined
-      const L = window.L;
-      
-      // Clear existing route if any
-      if (routeLayerRef.current) {
-        routeLayerRef.current.remove();
+      if (directionsRendererRef.current) {
+        directionsRendererRef.current.setDirections(result);
       }
-      
-      // Draw new route on map
-      const routeCoordinates = result.routes[0].overview_polyline.points.map(
-        (point: { lat: number; lng: number }) => [point.lat, point.lng]
-      );
-      
-      const routeLayer = L.polyline(routeCoordinates, {
-        color: '#3887be',
-        weight: 5,
-        opacity: 0.75
-      }).addTo(mapRef.current);
-      
-      routeLayerRef.current = routeLayer;
-      
-      // Fit map to the route bounds
-      const bounds = L.latLngBounds(routeCoordinates);
-      mapRef.current.fitBounds(bounds, { padding: [50, 50] });
       
       toast({
         title: "Directions Found",
-        description: `Route found! Distance: ${result.routes[0].legs[0].distance.text}, Duration: ${result.routes[0].legs[0].duration.text}`,
+        description: `Route found! Distance: ${result.routes[0].legs[0].distance?.text}, Duration: ${result.routes[0].legs[0].duration?.text}`,
       });
       
     } catch (error) {
@@ -227,8 +212,8 @@ const MapView = () => {
     directionsText += `Total distance is ${distance} and will take approximately ${duration}. `;
     
     // Add first 5 instructions to avoid too long speech
-    steps.slice(0, 5).forEach((step: any, index: number) => {
-      directionsText += `Step ${index + 1}: ${step.instructions} for ${step.distance?.text}. `;
+    steps.slice(0, 5).forEach((step, index) => {
+      directionsText += `Step ${index + 1}: ${step.instructions.replace(/<[^>]*>/g, '')} for ${step.distance?.text}. `;
     });
     
     if (steps.length > 5) {
@@ -260,6 +245,11 @@ const MapView = () => {
     speechSynthesis.speak(speechUtterance.current);
   };
   
+  // Handle API key updates
+  const handleApiKeySet = (key: string) => {
+    setApiKey(key);
+  };
+  
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -269,7 +259,16 @@ const MapView = () => {
     };
   }, []);
   
-  // Show loading state while LocationIQ API is loading
+  // If API key is not set or map fails to load, show API input
+  if (!apiKey || loadError) {
+    return (
+      <div className="h-[80vh] w-full flex items-center justify-center p-4">
+        <ApiKeyInput onApiKeySet={handleApiKeySet} />
+      </div>
+    );
+  }
+
+  // Show loading state while Google Maps API is loading
   if (!isLoaded) {
     return (
       <div className="h-[80vh] w-full flex items-center justify-center">
@@ -281,31 +280,25 @@ const MapView = () => {
     );
   }
 
-  // Show error message if LocationIQ API fails to load
-  if (loadError) {
-    return (
-      <div className="h-[80vh] w-full flex items-center justify-center p-4">
-        <Card className="w-full max-w-md mx-auto">
-          <CardContent className="p-4">
-            <p className="text-center text-destructive">
-              Failed to load map. Please try again later.
-            </p>
-            <p className="text-center text-sm text-muted-foreground mt-2">
-              Error: {loadError.message}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="h-[80vh] w-full relative">
-      {/* Map Component */}
-      <div ref={mapContainerRef} className="h-full w-full"></div>
+      {/* Google Map Component */}
+      <GoogleMap
+        mapContainerStyle={{ width: '100%', height: '100%' }}
+        center={{ lat: 20.5937, lng: 78.9629 }} // Center on India
+        zoom={5}
+        options={{
+          streetViewControl: false,
+          mapTypeControl: true,
+          fullscreenControl: true,
+        }}
+        onLoad={onMapLoad}
+      >
+        {/* Markers will be added in onMapLoad function */}
+      </GoogleMap>
       
       {/* Directions Panel */}
-      <Card className="absolute top-4 left-4 w-[320px] z-[1000] shadow-lg">
+      <Card className="absolute top-4 left-4 w-[320px] z-10 shadow-lg">
         <CardContent className="p-4">
           <div className="mb-2">
             <label className="block mb-1 text-sm font-medium">Start Location</label>
