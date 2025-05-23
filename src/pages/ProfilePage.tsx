@@ -45,7 +45,8 @@ const ProfilePage = () => {
   // Load user data when component mounts
   useEffect(() => {
     if (user) {
-      setName(user.name || "");
+      // Access user.user_metadata.name instead of user.name
+      setName(user.user_metadata?.name || "");
       setEmail(user.email || "");
     }
   }, [user]);

@@ -9,10 +9,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: any }>;
-  register: (email: string, password: string) => Promise<{ success: boolean; error?: any }>;
+  register: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: any }>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<{ success: boolean; error?: any }>;
-  handlePasswordReset: (email: string) => Promise<{ success: boolean; error?: any }>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; error?: any }>;
   updatePassword: (password: string) => Promise<{ success: boolean; error?: any }>;
 }
 
@@ -25,7 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   register: async () => ({ success: false }),
   logout: async () => {},
   deleteAccount: async () => ({ success: false }),
-  handlePasswordReset: async () => ({ success: false }),
+  forgotPassword: async () => ({ success: false }),
   updatePassword: async () => ({ success: false }),
 });
 
@@ -116,13 +116,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Register function
-  const register = async (email: string, password: string) => {
+  const register = async (email: string, password: string, name: string) => {
     try {
       setIsLoading(true);
       
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            name: name
+          }
+        }
       });
       
       if (error) {
@@ -221,8 +226,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // All other functions remain the same but we need to fix the handlePasswordReset
-  const handlePasswordReset = async (email: string) => {
+  // Handle password reset (previously handlePasswordReset)
+  const forgotPassword = async (email: string) => {
     try {
       setIsLoading(true);
       
@@ -294,7 +299,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     register,
     logout,
     deleteAccount,
-    handlePasswordReset,
+    forgotPassword,
     updatePassword,
   };
 
