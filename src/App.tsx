@@ -23,6 +23,8 @@ import RegisterPage from "./pages/RegisterPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
+import VerificationSuccessPage from "./pages/VerificationSuccessPage";
+import AccountDeletedPage from "./pages/AccountDeletedPage";
 
 // Initialize the query client
 const queryClient = new QueryClient();
@@ -49,6 +51,8 @@ const App = () => (
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/verification-success" element={<VerificationSuccessPage />} />
+              <Route path="/account-deleted" element={<AccountDeletedPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

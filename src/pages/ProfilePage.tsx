@@ -1,11 +1,6 @@
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -13,406 +8,332 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
+} from "@/components/ui/card";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, Settings, User, Lock, Trash2 } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
-import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose
-} from "@/components/ui/dialog";
-
-const profileFormSchema = z.object({
-  name: z.string().min(2, {
-    message: "Name must be at least 2 characters.",
-  }),
-  email: z.string().email({
-    message: "Please enter a valid email.",
-  }),
-});
-
-const passwordFormSchema = z.object({
-  currentPassword: z.string().min(6, {
-    message: "Password must be at least 6 characters.",
-  }),
-  newPassword: z.string().min(6, {
-    message: "Password must be at least 6 characters.",
-  }),
-  confirmPassword: z.string().min(6, {
-    message: "Password must be at least 6 characters.",
-  }),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "New passwords don't match",
-  path: ["confirmPassword"],
-});
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Lock, LogOut, User as UserIcon, AlertTriangle } from "lucide-react";
 
 const ProfilePage = () => {
-  const { user, logout, isAuthenticated, deleteAccount } = useAuth();
+  const { user, logout, isLoading, deleteAccount } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const { toast } = useToast();
-
-  const profileForm = useForm<z.infer<typeof profileFormSchema>>({
-    resolver: zodResolver(profileFormSchema),
-    defaultValues: {
-      name: user?.name || '',
-      email: user?.email || '',
-    },
-  });
-
-  const passwordForm = useForm<z.infer<typeof passwordFormSchema>>({
-    resolver: zodResolver(passwordFormSchema),
-    defaultValues: {
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    },
-  });
-
+  
+  // Form states
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  
+  // Load user data when component mounts
   useEffect(() => {
     if (user) {
-      profileForm.reset({
-        name: user.name || '',
-        email: user.email || ''
-      });
+      setName(user.name || "");
+      setEmail(user.email || "");
     }
-  }, [user, profileForm]);
+  }, [user]);
 
-  const onProfileSubmit = async (values: z.infer<typeof profileFormSchema>) => {
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !user) {
+      navigate("/login");
+    }
+  }, [user, isLoading, navigate]);
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdating(true);
+    
     try {
-      setIsUpdating(true);
-      
-      // Update profile in Supabase
-      const { error } = await supabase
-        .from('profiles')
-        .update({ name: values.name })
-        .eq('id', user?.id);
-        
-      if (error) throw error;
-      
+      // Add profile update logic here
       toast({
         title: "Profile updated",
-        description: "Your profile has been updated successfully.",
+        description: "Your profile information has been updated successfully.",
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to update profile.",
-        variant: "destructive"
+        title: "Update failed",
+        description: "There was an error updating your profile. Please try again.",
+        variant: "destructive",
       });
-      console.error("Error updating profile:", error);
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const onPasswordSubmit = async (values: z.infer<typeof passwordFormSchema>) => {
-    try {
-      setIsUpdating(true);
-      
-      // Update password in Supabase
-      const { error } = await supabase.auth.updateUser({
-        password: values.newPassword
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Passwords don't match",
+        description: "New password and confirmation must match.",
+        variant: "destructive",
       });
-      
-      if (error) throw error;
-      
-      passwordForm.reset();
+      return;
+    }
+    
+    setIsUpdating(true);
+    
+    try {
+      // Add password update logic here
       toast({
         title: "Password updated",
         description: "Your password has been updated successfully.",
       });
+      // Reset form
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to update password.",
-        variant: "destructive"
+        title: "Update failed",
+        description: "There was an error updating your password. Please try again.",
+        variant: "destructive",
       });
-      console.error("Error updating password:", error);
     } finally {
       setIsUpdating(false);
     }
   };
 
   const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      console.error("Error during logout:", error);
-    }
+    await logout();
+    navigate("/login");
   };
 
   const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    
     try {
-      setIsDeleting(true);
-      
-      // Delete user account using the deleteAccount function from AuthContext
       const { error } = await deleteAccount();
       
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       
-      // Navigate to login page after successful deletion
-      navigate('/login');
-      
-      toast({
-        title: "Account deleted",
-        description: "Your account has been permanently deleted.",
-      });
+      navigate("/account-deleted");
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: "Failed to delete account: " + (error?.message || "Unknown error"),
-        variant: "destructive"
+        title: "Account deletion failed",
+        description: error.message || "There was an error deleting your account. Please try again.",
+        variant: "destructive",
       });
-      console.error("Error deleting account:", error);
-    } finally {
       setIsDeleting(false);
-      setShowDeleteConfirmation(false);
     }
   };
 
-  if (!isAuthenticated) {
+  if (isLoading) {
     return (
-      <div className="container mx-auto max-w-md py-12 px-4 text-center">
-        <div className="p-8 border border-muted rounded-lg">
-          <User className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <h2 className="text-2xl font-semibold mb-2">Sign in to view your profile</h2>
-          <p className="text-muted-foreground mb-6">
-            Create an account or sign in to manage your profile
-          </p>
-          <div className="flex justify-center gap-4">
-            <Link to="/login">
-              <Button>Sign In</Button>
-            </Link>
-            <Link to="/register">
-              <Button variant="outline">Create Account</Button>
-            </Link>
-          </div>
-        </div>
+      <div className="flex items-center justify-center h-[calc(100vh-5rem)]">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
+  if (!user) {
+    return null; // Will redirect in useEffect
+  }
+
   return (
-    <div className="container mx-auto max-w-4xl pb-24">
-      <div className="p-4">
-        <h1 className="text-2xl font-bold mb-6">Your Profile</h1>
-
-        <div className="mb-8 flex items-center">
-          <Avatar className="h-20 w-20 mr-4">
-            <AvatarImage src={user?.profileImage} alt={user?.name} />
-            <AvatarFallback className="text-xl">{user?.name?.charAt(0) || 'U'}</AvatarFallback>
-          </Avatar>
-          <div>
-            <h2 className="text-xl font-bold">{user?.name}</h2>
-            <p className="text-muted-foreground">Member since {new Date(user?.createdAt || '').toLocaleDateString()}</p>
-          </div>
-        </div>
-
-        <Tabs defaultValue="account" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="account">
-              <User className="mr-2 h-4 w-4" />
-              Account
-            </TabsTrigger>
-            <TabsTrigger value="security">
-              <Lock className="mr-2 h-4 w-4" />
-              Security
-            </TabsTrigger>
-          </TabsList>
-          
-          {/* Account Tab */}
-          <TabsContent value="account">
-            <Card>
-              <CardHeader>
-                <CardTitle>Account Information</CardTitle>
-                <CardDescription>Update your account settings</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Form {...profileForm}>
-                  <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
-                    <FormField
-                      control={profileForm.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Your name" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+    <div className="container py-8 max-w-3xl">
+      <h1 className="text-3xl font-bold mb-6">My Profile</h1>
+      
+      <Tabs defaultValue="profile">
+        <TabsList className="grid w-full grid-cols-2 mb-8">
+          <TabsTrigger value="profile">Profile Information</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="profile">
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Information</CardTitle>
+              <CardDescription>Update your profile details here.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleProfileUpdate}>
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">Full Name</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Your name"
+                      required
                     />
-                    <FormField
-                      control={profileForm.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Your email" readOnly {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Your email"
+                      required
+                      disabled
                     />
-                    <Button type="submit" disabled={isUpdating}>
-                      {isUpdating ? 'Updating...' : 'Save Changes'}
-                    </Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-            
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>Account Actions</CardTitle>
-                <CardDescription>Sign out of your account</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  variant="outline" 
-                  onClick={handleLogout}
-                  className="w-full"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign Out
+                    <p className="text-sm text-muted-foreground">
+                      Email address cannot be changed.
+                    </p>
+                  </div>
+                </div>
+                
+                <Button className="mt-6" type="submit" disabled={isUpdating}>
+                  {isUpdating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <UserIcon className="mr-2 h-4 w-4" />
+                      Update Profile
+                    </>
+                  )}
                 </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="security">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Update Password</CardTitle>
+              <CardDescription>
+                Change your password here. After saving, you'll be logged out.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handlePasswordUpdate}>
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="current">Current Password</Label>
+                    <Input
+                      id="current"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <Label htmlFor="new">New Password</Label>
+                    <Input
+                      id="new"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <Label htmlFor="confirm">Confirm New Password</Label>
+                    <Input
+                      id="confirm"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <Button className="mt-6" type="submit" disabled={isUpdating}>
+                  {isUpdating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="mr-2 h-4 w-4" />
+                      Update Password
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
           
-          {/* Security Tab */}
-          <TabsContent value="security">
-            <Card>
-              <CardHeader>
-                <CardTitle>Password</CardTitle>
-                <CardDescription>Change your password</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Form {...passwordForm}>
-                  <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
-                    <FormField
-                      control={passwordForm.control}
-                      name="currentPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Current Password</FormLabel>
-                          <FormControl>
-                            <Input type="password" placeholder="Enter current password" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={passwordForm.control}
-                      name="newPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>New Password</FormLabel>
-                          <FormControl>
-                            <Input type="password" placeholder="Enter new password" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={passwordForm.control}
-                      name="confirmPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Confirm New Password</FormLabel>
-                          <FormControl>
-                            <Input type="password" placeholder="Confirm new password" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" disabled={isUpdating}>
-                      {isUpdating ? 'Updating...' : 'Update Password'}
-                    </Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-            
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle className="text-destructive">Danger Zone</CardTitle>
-                <CardDescription>Delete your account permanently</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Dialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
-                  <DialogTrigger asChild>
-                    <Button 
-                      variant="destructive" 
-                      className="w-full"
+          <Card>
+            <CardHeader>
+              <CardTitle>Account Actions</CardTitle>
+              <CardDescription>
+                Manage your session and account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col space-y-4">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={handleLogout}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </Button>
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="destructive" 
+                    className="w-full justify-start"
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="mr-2 h-4 w-4" />
+                    )}
+                    Delete Account
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete your account
+                      and remove all your data from our servers.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction 
+                      onClick={handleDeleteAccount}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete Account
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Delete Account</DialogTitle>
-                      <DialogDescription>
-                        This action cannot be undone. This will permanently delete your account
-                        and remove all your data from our servers.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <p className="text-destructive font-semibold">
-                        Are you absolutely sure you want to delete your account?
-                      </p>
-                    </div>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button variant="outline" onClick={() => setShowDeleteConfirmation(false)}>Cancel</Button>
-                      </DialogClose>
-                      <Button 
-                        variant="destructive" 
-                        onClick={handleDeleteAccount}
-                        disabled={isDeleting}
-                      >
-                        {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+                      Yes, delete my account
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

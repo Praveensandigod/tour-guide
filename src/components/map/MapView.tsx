@@ -1,17 +1,16 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { MapPin, ArrowRight, Volume2, VolumeX } from 'lucide-react';
+import { MapPin, ArrowRight, Volume2, VolumeX, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { GoogleMap } from '@react-google-maps/api';
-import ApiKeyInput from './ApiKeyInput';
 import { getGoogleMapsApiKey } from '@/config/apiConfig';
 import { useGoogleMapsApi } from '@/utils/googleMapsService';
 import { useDebounce } from 'use-debounce';
+import { useAuth } from '@/contexts/AuthContext';
 
 const MapView = () => {
   const { destinations } = useDestinations();
@@ -19,9 +18,11 @@ const MapView = () => {
   const location = useLocation();
   const selectedDestinationId = location.state?.destinationId || destinationId;
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
 
   // Google Maps API key state
-  const [apiKey, setApiKey] = useState<string | null>(getGoogleMapsApiKey());
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [isLoadingKey, setIsLoadingKey] = useState(true);
   const { isLoaded, loadError } = useGoogleMapsApi(apiKey);
   
   // Map elements
@@ -40,6 +41,28 @@ const MapView = () => {
   const [isSpeakingDirections, setIsSpeakingDirections] = useState(false);
   const speechSynthesis = window.speechSynthesis;
   const speechUtterance = useRef<SpeechSynthesisUtterance | null>(null);
+  
+  // Fetch API key on component mount
+  useEffect(() => {
+    const fetchApiKey = async () => {
+      setIsLoadingKey(true);
+      try {
+        const key = await getGoogleMapsApiKey();
+        setApiKey(key);
+      } catch (error) {
+        console.error("Error fetching API key:", error);
+        toast({
+          title: "API Key Error",
+          description: "Failed to load the map API key from the server. Please try again later.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoadingKey(false);
+      }
+    };
+    
+    fetchApiKey();
+  }, [toast]);
   
   // Initialize the map
   const onMapLoad = (map: google.maps.Map) => {
@@ -245,11 +268,6 @@ const MapView = () => {
     speechSynthesis.speak(speechUtterance.current);
   };
   
-  // Handle API key updates
-  const handleApiKeySet = (key: string) => {
-    setApiKey(key);
-  };
-  
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -259,11 +277,47 @@ const MapView = () => {
     };
   }, []);
   
-  // If API key is not set or map fails to load, show API input
-  if (!apiKey || loadError) {
+  // Show loading state while fetching API key
+  if (isLoadingKey) {
+    return (
+      <div className="h-[80vh] w-full flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-primary" />
+          <p>Loading map configuration...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show error if API key couldn't be loaded
+  if (!apiKey && !isLoadingKey) {
     return (
       <div className="h-[80vh] w-full flex items-center justify-center p-4">
-        <ApiKeyInput onApiKeySet={handleApiKeySet} />
+        <Card className="max-w-md w-full">
+          <CardContent className="pt-6">
+            {isAuthenticated ? (
+              <>
+                <h3 className="text-xl font-bold mb-2">Map Unavailable</h3>
+                <p className="mb-4">
+                  The map API key could not be loaded from the server. Please try again later or contact support.
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-bold mb-2">Authentication Required</h3>
+                <p className="mb-4">
+                  You need to be logged in to access the map feature.
+                </p>
+                <Button
+                  className="w-full"
+                  onClick={() => window.location.href = '/login'}
+                >
+                  Log In to Access Maps
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -276,6 +330,22 @@ const MapView = () => {
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p>Loading map...</p>
         </div>
+      </div>
+    );
+  }
+  
+  if (loadError) {
+    return (
+      <div className="h-[80vh] w-full flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardContent className="pt-6">
+            <h3 className="text-xl font-bold mb-2">Map Error</h3>
+            <p className="mb-4">
+              There was an error loading the Google Maps API. Please try again later.
+            </p>
+            <p className="text-sm text-muted-foreground">{loadError.message}</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }

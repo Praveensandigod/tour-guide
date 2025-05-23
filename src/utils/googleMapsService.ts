@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 
 // Create a service to load Google Maps script
@@ -20,16 +19,16 @@ export const useGoogleMapsApi = (apiKey: string | null) => {
       return;
     }
 
+    // Set a global callback function that Google Maps will call
+    window.googleMapsCallback = () => {
+      setIsLoaded(true);
+    };
+
     const script = document.createElement('script');
     script.id = googleMapsScriptId;
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,directions,geocoding&v=weekly&callback=googleMapsCallback`;
     script.async = true;
     script.defer = true;
-
-    // Define the callback function
-    window.googleMapsCallback = () => {
-      setIsLoaded(true);
-    };
 
     script.onerror = (error) => {
       setLoadError(new Error('Google Maps script failed to load'));

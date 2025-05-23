@@ -1,19 +1,24 @@
 
-// This is a configuration file for API keys
-// In a production environment, these keys should be stored securely on the server
-// and accessed through an authenticated API endpoint
+import { supabase } from '@/integrations/supabase/client';
 
 // Configuration for Google Maps API
-export const getGoogleMapsApiKey = (): string | null => {
-  // For development, you can hardcode the API key here
-  // For production, this should be retrieved securely from your backend
-  // return "YOUR_GOOGLE_MAPS_API_KEY";
-  
-  // For now, let's use localStorage as a temporary solution
-  return localStorage.getItem('googleMapsApiKey');
-};
-
-// Function to securely set the API key (temporary solution)
-export const setGoogleMapsApiKey = (apiKey: string): void => {
-  localStorage.setItem('googleMapsApiKey', apiKey);
+export const getGoogleMapsApiKey = async (): Promise<string | null> => {
+  try {
+    // Try to get the key from the backend service
+    const { data, error } = await supabase.functions.invoke('get-google-maps-key');
+    
+    if (error) {
+      console.error('Error fetching API key:', error);
+      return null;
+    }
+    
+    if (data && data.apiKey) {
+      return data.apiKey;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error invoking function to get API key:', error);
+    return null;
+  }
 };

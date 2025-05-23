@@ -1,18 +1,4 @@
 
 project_id = "omobmgybzsdhtphvuaav"
-
-[api]
-enabled = true
-port = 54321
-schemas = ["public", "storage"]
-
-[db]
-port = 54322
-
-[storage]
-enabled = true
-
-[auth]
-enabled = true
-site_url = "http://localhost:5173"
-additional_redirect_urls = ["https://omobmgybzsdhtphvuaav.lovable.app"]
+[functions.get-google-maps-key]
+verify_jwt = true
