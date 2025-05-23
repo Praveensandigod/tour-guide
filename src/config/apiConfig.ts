@@ -17,14 +17,3 @@ export const getGoogleMapsApiKey = (): string | null => {
 export const setGoogleMapsApiKey = (apiKey: string): void => {
   localStorage.setItem('googleMapsApiKey', apiKey);
 };
-
-// Configuration for LocationIQ API
-export const getLocationIqApiKey = (): string | null => {
-  // We store the LocationIQ API key in localStorage for now
-  return localStorage.getItem('locationIqApiKey') || "pk.c6d6c51883fc4479d4c42fd1ff821586";
-};
-
-// Function to securely set the LocationIQ API key (temporary solution)
-export const setLocationIqApiKey = (apiKey: string): void => {
-  localStorage.setItem('locationIqApiKey', apiKey);
-};

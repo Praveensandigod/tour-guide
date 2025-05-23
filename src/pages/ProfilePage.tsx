@@ -69,10 +69,11 @@ const passwordFormSchema = z.object({
 });
 
 const ProfilePage = () => {
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, deleteAccount } = useAuth();
   const navigate = useNavigate();
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const { toast } = useToast();
 
   const profileForm = useForm<z.infer<typeof profileFormSchema>>({
@@ -170,25 +171,18 @@ const ProfilePage = () => {
     try {
       setIsDeleting(true);
       
-      // Delete user account from Supabase Auth
-      // Note: This will cascade delete the user's profile and data due to RLS policies
-      const { error } = await supabase.auth.admin.deleteUser(user?.id || '');
+      // Delete user account using the deleteAccount function from AuthContext
+      const { error } = await deleteAccount();
       
-      if (error) {
-        // Fallback to client-side deletion if admin API fails
-        const { error: clientError } = await supabase.rpc('delete_user');
-        if (clientError) throw clientError;
-      }
+      if (error) throw error;
       
-      // Log the user out
-      await logout();
+      // Navigate to login page after successful deletion
+      navigate('/login');
       
       toast({
         title: "Account deleted",
         description: "Your account has been permanently deleted.",
       });
-      
-      navigate('/login');
     } catch (error: any) {
       toast({
         title: "Error",
@@ -198,6 +192,7 @@ const ProfilePage = () => {
       console.error("Error deleting account:", error);
     } finally {
       setIsDeleting(false);
+      setShowDeleteConfirmation(false);
     }
   };
 
@@ -376,7 +371,7 @@ const ProfilePage = () => {
                 <CardDescription>Delete your account permanently</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Dialog>
+                <Dialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
                   <DialogTrigger asChild>
                     <Button 
                       variant="destructive" 
@@ -401,7 +396,7 @@ const ProfilePage = () => {
                     </div>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline" onClick={() => setShowDeleteConfirmation(false)}>Cancel</Button>
                       </DialogClose>
                       <Button 
                         variant="destructive" 
