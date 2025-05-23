@@ -14,11 +14,23 @@ const SearchBar = () => {
   const [debouncedQuery] = useDebounce(query, 300); // 300ms debounce
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [apiKey, setApiKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
-  // Get API key
-  const apiKey = getGoogleMapsApiKey();
+  // Fetch API key on component mount
+  useEffect(() => {
+    const fetchApiKey = async () => {
+      try {
+        const key = await getGoogleMapsApiKey();
+        setApiKey(key);
+      } catch (error) {
+        console.error("Error fetching Google Maps API key:", error);
+      }
+    };
+    
+    fetchApiKey();
+  }, []);
   
   // Use place autocomplete if API key is available
   const { suggestions, isLoading, error } = usePlaceAutocomplete(
