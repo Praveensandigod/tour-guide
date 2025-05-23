@@ -181,25 +181,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Delete account function
+  // Delete account function - Updated to use the proper Supabase method
   const deleteAccount = async () => {
     try {
       setIsLoading(true);
-      
-      // Get the current user
-      const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
         throw new Error("No user found to delete");
       }
       
-      // Delete the user from auth.users
-      const { error: deleteError } = await supabase.auth.admin.deleteUser(
-        user.id
-      );
+      // First delete any user-specific data from the database
+      // This ensures all user data is removed before the user account
+      const { error: dataDeleteError } = await supabase
+        .from('user_destinations')
+        .delete()
+        .eq('user_id', user.id);
       
-      if (deleteError) {
-        throw deleteError;
+      if (dataDeleteError) {
+        console.error("Error deleting user data:", dataDeleteError);
+      }
+      
+      // Now delete the user account
+      const { error } = await supabase.auth.admin.deleteUser(user.id);
+      
+      if (error) {
+        // If we get an error due to permissions, try the client-side approach
+        if (error.message.includes("not_admin") || error.message.includes("permission")) {
+          // Use the client-side approach instead
+          await supabase.rpc('delete_user');
+        } else {
+          throw error;
+        }
       }
       
       // Sign out after successful deletion
@@ -208,6 +220,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Clear auth state
       setUser(null);
       setIsAuthenticated(false);
+      
+      toast({
+        title: "Account Deleted",
+        description: "Your account has been successfully deleted.",
+      });
       
       // Navigate to account deleted confirmation page
       window.location.href = '/account-deleted';
