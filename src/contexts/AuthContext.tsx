@@ -181,7 +181,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Delete account function - Updated to use the edge function properly
+  // Delete account function - Updated to properly pass authorization
   const deleteAccount = async () => {
     try {
       setIsLoading(true);
@@ -190,8 +190,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error("No user found to delete");
       }
       
-      // Call the delete-user edge function
-      const { error } = await supabase.functions.invoke('delete-user');
+      // Get the current session to access the access token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        throw new Error("No valid session found");
+      }
+      
+      // Call the delete-user edge function with proper authorization
+      const { error } = await supabase.functions.invoke('delete-user', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
       
       if (error) {
         throw error;
