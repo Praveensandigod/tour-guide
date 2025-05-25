@@ -18,6 +18,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     
     if (!authHeader) {
+      console.error('No authorization header provided')
       return new Response(
         JSON.stringify({ error: 'No authorization header' }),
         { 
@@ -29,29 +30,36 @@ Deno.serve(async (req) => {
     
     // Extract the token
     const token = authHeader.replace('Bearer ', '')
+    console.log('Received token, length:', token.length)
     
-    // Create a Supabase client with the auth token to get user info
-    const supabaseClient = createClient(
+    // Create a Supabase client with the service role key for admin operations
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+    
+    // Create a client with the user's token to verify and get user info
+    const supabaseUser = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
         global: {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: authHeader,
           },
         },
       }
     )
     
-    // Get the current user
-    const { data: { user }, error: getUserError } = await supabaseClient.auth.getUser()
+    // Get the current user using the user token
+    const { data: { user }, error: getUserError } = await supabaseUser.auth.getUser(token)
     
     if (getUserError || !user) {
       console.error('Error getting user:', getUserError)
       return new Response(
-        JSON.stringify({ error: 'Error getting user', details: getUserError }),
+        JSON.stringify({ error: 'Invalid user token', details: getUserError }),
         { 
-          status: 400, 
+          status: 401, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
@@ -59,28 +67,27 @@ Deno.serve(async (req) => {
     
     console.log('Deleting user:', user.id)
     
-    // First call the database function to delete user data
-    const { error: dbDeleteError } = await supabaseClient.rpc('delete_user')
+    // First delete user data from custom tables using admin client
+    const { error: profileDeleteError } = await supabaseAdmin
+      .from('profiles')
+      .delete()
+      .eq('id', user.id)
     
-    if (dbDeleteError) {
-      console.error('Error deleting user data:', dbDeleteError)
-      return new Response(
-        JSON.stringify({ error: 'Error deleting user data', details: dbDeleteError }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+    if (profileDeleteError) {
+      console.error('Error deleting profile:', profileDeleteError)
     }
     
-    // Create an admin client to delete the user from auth.users
-    const adminClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const { error: destinationsDeleteError } = await supabaseAdmin
+      .from('user_destinations')
+      .delete()
+      .eq('user_id', user.id)
     
-    // Delete the user from auth.users
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id)
+    if (destinationsDeleteError) {
+      console.error('Error deleting user destinations:', destinationsDeleteError)
+    }
+    
+    // Delete the user from auth.users using admin client
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user.id)
     
     if (deleteError) {
       console.error('Error deleting user from auth:', deleteError)
