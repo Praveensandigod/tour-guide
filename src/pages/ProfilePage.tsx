@@ -26,10 +26,12 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Lock, LogOut, User as UserIcon, AlertTriangle } from "lucide-react";
+import { Loader2, Lock, LogOut, User as UserIcon, AlertTriangle, Eye, EyeOff } from "lucide-react";
+
+const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{6,}$/;
 
 const ProfilePage = () => {
-  const { user, logout, isLoading, deleteAccount } = useAuth();
+  const { user, logout, isLoading, deleteAccount, updatePassword } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -42,10 +44,14 @@ const ProfilePage = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   
+  // Password visibility states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
   // Load user data when component mounts
   useEffect(() => {
     if (user) {
-      // Access user.user_metadata.name instead of user.name
       setName(user.user_metadata?.name || "");
       setEmail(user.email || "");
     }
@@ -91,22 +97,36 @@ const ProfilePage = () => {
       return;
     }
     
+    if (!passwordRegex.test(newPassword)) {
+      toast({
+        title: "Invalid password format",
+        description: "Password must contain at least one letter, one number, and one special character.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsUpdating(true);
     
     try {
-      // Add password update logic here
-      toast({
-        title: "Password updated",
-        description: "Your password has been updated successfully.",
-      });
-      // Reset form
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (error) {
+      const result = await updatePassword(newPassword);
+      
+      if (result.success) {
+        toast({
+          title: "Password updated",
+          description: "Your password has been updated successfully.",
+        });
+        // Reset form
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        throw new Error(result.error?.message || "Failed to update password");
+      }
+    } catch (error: any) {
       toast({
         title: "Update failed",
-        description: "There was an error updating your password. Please try again.",
+        description: error.message || "There was an error updating your password. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -226,7 +246,7 @@ const ProfilePage = () => {
             <CardHeader>
               <CardTitle>Update Password</CardTitle>
               <CardDescription>
-                Change your password here. After saving, you'll be logged out.
+                Change your password here. Password must contain at least one letter, one number, and one special character.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -234,36 +254,73 @@ const ProfilePage = () => {
                 <div className="grid gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="current">Current Password</Label>
-                    <Input
-                      id="current"
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      required
-                    />
+                    <div className="relative">
+                      <Input
+                        id="current"
+                        type={showCurrentPassword ? "text" : "password"}
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      >
+                        {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="grid gap-2">
                     <Label htmlFor="new">New Password</Label>
-                    <Input
-                      id="new"
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      required
-                    />
+                    <div className="relative">
+                      <Input
+                        id="new"
+                        type={showNewPassword ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                      >
+                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="grid gap-2">
                     <Label htmlFor="confirm">Confirm New Password</Label>
-                    <Input
-                      id="confirm"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                    />
+                    <div className="relative">
+                      <Input
+                        id="confirm"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
+                </div>
+                
+                <div className="mt-4 text-sm text-muted-foreground">
+                  <p>Password requirements:</p>
+                  <ul className="list-disc ml-4">
+                    <li>At least 6 characters long</li>
+                    <li>At least one letter</li>
+                    <li>At least one number</li>
+                    <li>At least one special character (@$!%*#?&)</li>
+                  </ul>
                 </div>
                 
                 <Button className="mt-6" type="submit" disabled={isUpdating}>
