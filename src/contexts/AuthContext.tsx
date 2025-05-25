@@ -181,7 +181,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Delete account function - Updated to use the proper Supabase method
+  // Delete account function - Updated to use the edge function properly
   const deleteAccount = async () => {
     try {
       setIsLoading(true);
@@ -190,28 +190,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error("No user found to delete");
       }
       
-      // First delete any user-specific data from the database
-      // This ensures all user data is removed before the user account
-      const { error: dataDeleteError } = await supabase
-        .from('user_destinations')
-        .delete()
-        .eq('user_id', user.id);
-      
-      if (dataDeleteError) {
-        console.error("Error deleting user data:", dataDeleteError);
-      }
-      
-      // Now delete the user account
-      const { error } = await supabase.auth.admin.deleteUser(user.id);
+      // Call the delete-user edge function
+      const { error } = await supabase.functions.invoke('delete-user');
       
       if (error) {
-        // If we get an error due to permissions, try the client-side approach
-        if (error.message.includes("not_admin") || error.message.includes("permission")) {
-          // Use the client-side approach instead
-          await supabase.rpc('delete_user');
-        } else {
-          throw error;
-        }
+        throw error;
       }
       
       // Sign out after successful deletion
@@ -225,9 +208,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         title: "Account Deleted",
         description: "Your account has been successfully deleted.",
       });
-      
-      // Navigate to account deleted confirmation page
-      window.location.href = '/account-deleted';
       
       return { success: true };
     } catch (error) {

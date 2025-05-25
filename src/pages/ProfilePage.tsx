@@ -123,19 +123,22 @@ const ProfilePage = () => {
     setIsDeleting(true);
     
     try {
-      const { error } = await deleteAccount();
+      const result = await deleteAccount();
       
-      if (error) {
-        throw error;
+      if (!result.success) {
+        throw new Error(result.error?.message || "Failed to delete account");
       }
       
+      // Navigate to account deleted page
       navigate("/account-deleted");
     } catch (error: any) {
+      console.error("Account deletion error:", error);
       toast({
         title: "Account deletion failed",
         description: error.message || "There was an error deleting your account. Please try again.",
         variant: "destructive",
       });
+    } finally {
       setIsDeleting(false);
     }
   };
