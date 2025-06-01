@@ -20,6 +20,15 @@ interface PlaceData {
   reviews?: any[];
 }
 
+interface RelatedPlace {
+  id: string;
+  name: string;
+  formatted_address: string;
+  rating: number;
+  photos?: string[];
+  place_id?: string;
+}
+
 const PlaceDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -27,13 +36,15 @@ const PlaceDetailPage = () => {
   const [destination, setDestination] = useState(destinations.find(d => d.id === id));
   const [placeData, setPlaceData] = useState<PlaceData | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [relatedPlaces, setRelatedPlaces] = useState<RelatedPlace[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [scrollY, setScrollY] = useState(0);
   const { toast } = useToast();
   
   // Handle Google Place data from location state
   const googlePlaceData = location.state?.placeDetails;
-  const isGooglePlace = location.state?.isGooglePlace || false;
+  const isGooglePlace = location.state?.isGooglePlace || id?.startsWith('google-');
+  const actualPlaceId = location.state?.placeId || (isGooglePlace ? id?.replace('google-', '') : null);
   
   useEffect(() => {
     const handleScroll = () => {
@@ -48,39 +59,70 @@ const PlaceDetailPage = () => {
     const fetchPlaceData = async () => {
       setIsLoading(true);
       
-      if (isGooglePlace && googlePlaceData) {
-        // Use Google Place data directly
-        setPlaceData(googlePlaceData);
-        await loadPhotos(googlePlaceData.photos || []);
-      } else if (destination) {
-        // For existing destinations, enhance with Google data
-        try {
+      try {
+        if (isGooglePlace && actualPlaceId) {
+          // Fetch Google Place details directly
+          const placeDetails = await googlePlacesService.getPlaceDetails(actualPlaceId);
+          
+          if (placeDetails) {
+            setPlaceData(placeDetails);
+            await loadPhotos(placeDetails.photos || []);
+            
+            // Search for related places
+            const searchResults = await googlePlacesService.searchPlaces(`near ${placeDetails.name}`);
+            if (searchResults?.results) {
+              await loadRelatedPlaces(searchResults.results.slice(1, 4)); // Skip first result (likely the same place)
+            }
+          }
+        } else if (googlePlaceData) {
+          // Use provided Google Place data
+          setPlaceData(googlePlaceData);
+          await loadPhotos(googlePlaceData.photos || []);
+        } else if (destination) {
+          // For existing destinations, enhance with Google data
           const searchResults = await googlePlacesService.searchPlaces(destination.name);
           
-          if (searchResults && searchResults.results && searchResults.results.length > 0) {
+          if (searchResults?.results && searchResults.results.length > 0) {
             const place = searchResults.results[0];
             const placeDetails = await googlePlacesService.getPlaceDetails(place.place_id);
             
             if (placeDetails) {
               setPlaceData(placeDetails);
               await loadPhotos(placeDetails.photos || []);
+              
+              // Load related places
+              await loadRelatedPlaces(searchResults.results.slice(1, 4));
             }
+          } else {
+            // Fallback to destination data
+            setPlaceData({
+              name: destination.name,
+              formatted_address: destination.location,
+              rating: destination.rating
+            });
           }
-        } catch (error) {
-          console.error('Error fetching Google data:', error);
+        }
+      } catch (error) {
+        console.error('Error fetching place data:', error);
+        if (destination) {
           setPlaceData({
             name: destination.name,
             formatted_address: destination.location,
             rating: destination.rating
           });
         }
+        toast({
+          title: "Error loading place details",
+          description: "Some information may not be available.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
     };
     
     fetchPlaceData();
-  }, [id, destination, isGooglePlace, googlePlaceData]);
+  }, [id, destination, isGooglePlace, googlePlaceData, actualPlaceId, toast]);
   
   const loadPhotos = async (photoReferences: any[]) => {
     if (!photoReferences || photoReferences.length === 0) return;
@@ -96,6 +138,36 @@ const PlaceDetailPage = () => {
       setPhotos(photoUrls.filter(url => url !== null));
     } catch (error) {
       console.error('Error loading photos:', error);
+    }
+  };
+
+  const loadRelatedPlaces = async (places: any[]) => {
+    try {
+      const related = await Promise.all(
+        places.map(async (place): Promise<RelatedPlace> => {
+          let photoUrl = '';
+          if (place.photos && place.photos.length > 0) {
+            try {
+              photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference) || '';
+            } catch (error) {
+              console.error('Error loading related place photo:', error);
+            }
+          }
+
+          return {
+            id: `google-${place.place_id}`,
+            name: place.name,
+            formatted_address: place.formatted_address || '',
+            rating: place.rating || 0,
+            photos: photoUrl ? [photoUrl] : [],
+            place_id: place.place_id
+          };
+        })
+      );
+      
+      setRelatedPlaces(related);
+    } catch (error) {
+      console.error('Error loading related places:', error);
     }
   };
   
@@ -119,7 +191,7 @@ const PlaceDetailPage = () => {
   
   if (!placeData && !destination) {
     return (
-      <div className="container mx-auto max-w-4xl py-12 text-center">
+      <div className="container mx-auto max-w-4xl py-12 text-center pb-24">
         <h1 className="text-2xl font-bold mb-4">Place not found</h1>
         <p className="mb-6">The place you're looking for doesn't exist or couldn't be loaded.</p>
         <Link to="/recommendations">
@@ -158,17 +230,6 @@ const PlaceDetailPage = () => {
     } else {
       saveDestination(destination);
     }
-  };
-  
-  const handleViewOnMap = () => {
-    const state = {
-      destinationId: destination?.id,
-      placeId: placeData?.place_id,
-      placeName: displayData.name,
-      placeDetails: placeData
-    };
-    
-    return `/map`;
   };
   
   // Use photos or fallback to destination image
@@ -281,10 +342,10 @@ const PlaceDetailPage = () => {
           </div>
           
           <Link 
-            to={handleViewOnMap()}
+            to="/map"
             state={{
               destinationId: destination?.id,
-              placeId: placeData?.place_id,
+              placeId: placeData?.place_id || actualPlaceId,
               placeName: displayData.name,
               placeDetails: placeData
             }}
@@ -312,31 +373,38 @@ const PlaceDetailPage = () => {
         </div>
       )}
       
-      {destinations.length > 0 && (
+      {relatedPlaces.length > 0 && (
         <div className="container mx-auto max-w-4xl px-4 mt-8">
           <h2 className="text-xl font-bold mb-4">You might also like</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {destinations
-              .filter(d => d.id !== destination?.id)
-              .slice(0, 3)
-              .map(d => (
-                <Link 
-                  key={d.id} 
-                  to={`/places/${d.id}`}
-                  className="group"
-                >
-                  <div className="rounded-lg overflow-hidden">
-                    <img 
-                      src={d.imageUrl} 
-                      alt={d.name} 
-                      className="h-32 w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
+            {relatedPlaces.map(place => (
+              <Link 
+                key={place.id} 
+                to={`/places/${place.id}`}
+                state={{
+                  placeId: place.place_id,
+                  placeName: place.name,
+                  isGooglePlace: true
+                }}
+                className="group"
+              >
+                <div className="rounded-lg overflow-hidden">
+                  <img 
+                    src={place.photos?.[0] || 'https://via.placeholder.com/300x200'} 
+                    alt={place.name} 
+                    className="h-32 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                </div>
+                <h3 className="font-medium mt-2">{place.name}</h3>
+                <p className="text-sm text-muted-foreground">{place.formatted_address}</p>
+                {place.rating > 0 && (
+                  <div className="flex items-center mt-1">
+                    <Star size={12} className="text-yellow-500 mr-1" fill="currentColor" />
+                    <span className="text-xs">{place.rating.toFixed(1)}</span>
                   </div>
-                  <h3 className="font-medium mt-2">{d.name}</h3>
-                  <p className="text-sm text-muted-foreground">{d.location}</p>
-                </Link>
-              ))
-            }
+                )}
+              </Link>
+            ))}
           </div>
         </div>
       )}

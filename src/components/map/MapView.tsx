@@ -18,6 +18,7 @@ const MapView = () => {
   const selectedDestinationId = location.state?.destinationId || destinationId;
   const selectedPlaceId = location.state?.placeId;
   const selectedPlaceName = location.state?.placeName;
+  const selectedPlaceDetails = location.state?.placeDetails;
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
 
@@ -68,6 +69,11 @@ const MapView = () => {
     if (!apiKey) return;
 
     const loadGoogleMapsScript = () => {
+      if (window.google) {
+        setMapLoaded(true);
+        return;
+      }
+
       const script = document.createElement('script');
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry&callback=googleMapsCallback`;
       script.async = true;
@@ -80,17 +86,16 @@ const MapView = () => {
       document.head.appendChild(script);
       
       return () => {
-        document.head.removeChild(script);
+        const existingScript = document.querySelector(`script[src*="maps.googleapis.com"]`);
+        if (existingScript) {
+          document.head.removeChild(existingScript);
+        }
         delete window.googleMapsCallback;
       };
     };
 
-    if (!window.google) {
-      const cleanup = loadGoogleMapsScript();
-      return cleanup;
-    } else {
-      setMapLoaded(true);
-    }
+    const cleanup = loadGoogleMapsScript();
+    return cleanup;
   }, [apiKey]);
   
   // Initialize the map
@@ -108,17 +113,19 @@ const MapView = () => {
     mapRef.current = map;
     directionsServiceRef.current = new window.google.maps.DirectionsService();
     
-    if (!directionsRendererRef.current) {
-      directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
-        suppressMarkers: false,
-        polylineOptions: {
-          strokeColor: '#3887be',
-          strokeWeight: 5,
-          strokeOpacity: 0.75
-        }
-      });
-      directionsRendererRef.current.setMap(map);
+    if (directionsRendererRef.current) {
+      directionsRendererRef.current.setMap(null);
     }
+    
+    directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+      suppressMarkers: false,
+      polylineOptions: {
+        strokeColor: '#3887be',
+        strokeWeight: 5,
+        strokeOpacity: 0.75
+      }
+    });
+    directionsRendererRef.current.setMap(map);
     
     // Add markers for existing destinations
     destinations.forEach(destination => {
@@ -154,9 +161,21 @@ const MapView = () => {
     if (selectedDestinationId) {
       const destination = destinations.find(d => d.id === selectedDestinationId);
       if (destination) {
-        map.setCenter({ lat: destination.coordinates.lat, lng: destination.coordinates.lng });
+        const position = { lat: destination.coordinates.lat, lng: destination.coordinates.lng };
+        map.setCenter(position);
         map.setZoom(14);
         setEndLocation(destination.name);
+        
+        // Add special marker for selected destination
+        new window.google.maps.Marker({
+          position,
+          map,
+          title: destination.name,
+          icon: {
+            url: 'https://img.icons8.com/color/48/google-maps-new.png',
+            scaledSize: new window.google.maps.Size(40, 40)
+          }
+        });
       }
     } else if (selectedPlaceId && selectedPlaceName) {
       handleGooglePlace(selectedPlaceId, map);
@@ -165,20 +184,26 @@ const MapView = () => {
   
   const handleGooglePlace = async (placeId: string, map: google.maps.Map) => {
     try {
-      const placeDetails = await googlePlacesService.getPlaceDetails(placeId);
+      let placeDetails = selectedPlaceDetails;
+      
+      if (!placeDetails) {
+        placeDetails = await googlePlacesService.getPlaceDetails(placeId);
+      }
       
       if (placeDetails && placeDetails.geometry) {
         const location = placeDetails.geometry.location;
-        map.setCenter(location);
+        const position = { lat: location.lat, lng: location.lng };
+        
+        map.setCenter(position);
         map.setZoom(14);
         
         const marker = new window.google.maps.Marker({
-          position: location,
+          position,
           map,
           title: placeDetails.name,
           icon: {
             url: 'https://img.icons8.com/color/48/google-maps-new.png',
-            scaledSize: new window.google.maps.Size(32, 32)
+            scaledSize: new window.google.maps.Size(40, 40)
           }
         });
         
@@ -206,6 +231,11 @@ const MapView = () => {
       }
     } catch (error) {
       console.error('Error handling Google Place:', error);
+      toast({
+        title: "Error loading place",
+        description: "Could not load the selected place on the map.",
+        variant: "destructive"
+      });
     }
   };
   
@@ -229,23 +259,36 @@ const MapView = () => {
     setIsLoading(true);
     
     try {
-      const result = await googlePlacesService.getDirections(startLocation, endLocation);
+      const directionsRequest: google.maps.DirectionsRequest = {
+        origin: startLocation,
+        destination: endLocation,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      };
       
-      if (result && result.routes && result.routes.length > 0) {
-        setDirectionsResponse(result);
-        
-        if (directionsRendererRef.current) {
-          directionsRendererRef.current.setDirections(result);
+      directionsServiceRef.current.route(directionsRequest, (result, status) => {
+        if (status === window.google.maps.DirectionsStatus.OK && result) {
+          setDirectionsResponse(result);
+          
+          if (directionsRendererRef.current) {
+            directionsRendererRef.current.setDirections(result);
+          }
+          
+          const route = result.routes[0];
+          const leg = route.legs[0];
+          
+          toast({
+            title: "Directions Found",
+            description: `Distance: ${leg.distance?.text}, Duration: ${leg.duration?.text}`,
+          });
+        } else {
+          toast({
+            title: "Direction Error",
+            description: "Could not find directions between these locations.",
+            variant: "destructive"
+          });
         }
-        
-        const route = result.routes[0];
-        const leg = route.legs[0];
-        
-        toast({
-          title: "Directions Found",
-          description: `Distance: ${leg.distance?.text}, Duration: ${leg.duration?.text}`,
-        });
-      }
+        setIsLoading(false);
+      });
     } catch (error) {
       console.error("Error calculating directions:", error);
       toast({
@@ -253,7 +296,6 @@ const MapView = () => {
         description: "An error occurred while getting directions.",
         variant: "destructive"
       });
-    } finally {
       setIsLoading(false);
     }
   };
@@ -378,8 +420,17 @@ const MapView = () => {
             onClick={handleDirections}
             disabled={isLoading || !startLocation || !endLocation}
           >
-            {isLoading ? 'Loading...' : 'Get Directions'}
-            {!isLoading && <ArrowRight size={16} className="ml-2" />}
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              <>
+                Get Directions
+                <ArrowRight size={16} className="ml-2" />
+              </>
+            )}
           </Button>
           
           {directionsResponse && directionsResponse.routes && directionsResponse.routes.length > 0 && (
