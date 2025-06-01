@@ -1,10 +1,9 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // CORS headers for browser requests
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*", // Adjust in production
+  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -17,8 +16,13 @@ serve(async (req) => {
   }
 
   try {
-    // Get the API key from environment variable
-    const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+    // Get the API key from environment variable or use the provided key
+    let apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+    
+    // If not set in environment, use the provided key
+    if (!apiKey) {
+      apiKey = "AIzaSyC1i61ye2wNUdmOoKlM2mvi9LI0m9vL7xE";
+    }
     
     if (!apiKey) {
       throw new Error("API key not configured");

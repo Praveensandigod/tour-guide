@@ -18,17 +18,28 @@ import {
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, Check, X } from "lucide-react";
+
+const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/;
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters long' }),
   email: z.string().email({ message: 'Please enter a valid email address' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters long' }),
+  password: z.string()
+    .min(8, { message: 'Password must be at least 8 characters long' })
+    .regex(passwordRegex, { message: 'Password must contain at least one letter, one number, and one special character' }),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
 });
+
+const PasswordRequirement = ({ met, text }: { met: boolean; text: string }) => (
+  <div className={`flex items-center text-sm ${met ? 'text-green-600' : 'text-gray-500'}`}>
+    {met ? <Check size={16} className="mr-2" /> : <X size={16} className="mr-2" />}
+    {text}
+  </div>
+);
 
 const RegisterForm = () => {
   const { register } = useAuth();
@@ -36,6 +47,8 @@ const RegisterForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -46,6 +59,14 @@ const RegisterForm = () => {
       confirmPassword: '',
     },
   });
+
+  const password = form.watch('password');
+
+  // Password requirement checks
+  const hasMinLength = password?.length >= 8;
+  const hasLetter = /[a-zA-Z]/.test(password || '');
+  const hasNumber = /\d/.test(password || '');
+  const hasSpecialChar = /[@$!%*?&]/.test(password || '');
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
@@ -64,8 +85,6 @@ const RegisterForm = () => {
         title: "Registration successful",
         description: "Your account has been created. Please verify your email to continue.",
       });
-      
-      // Stay on the page to show the verification message
     } catch (error: any) {
       setErrorMessage(error.message || "Failed to register. Please try again.");
       toast({
@@ -157,8 +176,27 @@ const RegisterForm = () => {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Create a password" {...field} />
+                      <div className="relative">
+                        <Input 
+                          type={showPassword ? "text" : "password"} 
+                          placeholder="Create a password" 
+                          {...field} 
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </FormControl>
+                    <div className="mt-2 space-y-1">
+                      <PasswordRequirement met={hasMinLength} text="At least 8 characters" />
+                      <PasswordRequirement met={hasLetter} text="Contains a letter" />
+                      <PasswordRequirement met={hasNumber} text="Contains a number" />
+                      <PasswordRequirement met={hasSpecialChar} text="Contains a special character (@$!%*?&)" />
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -170,7 +208,20 @@ const RegisterForm = () => {
                   <FormItem>
                     <FormLabel>Confirm Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Confirm your password" {...field} />
+                      <div className="relative">
+                        <Input 
+                          type={showConfirmPassword ? "text" : "password"} 
+                          placeholder="Confirm your password" 
+                          {...field} 
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        >
+                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

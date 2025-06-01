@@ -9,10 +9,107 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      destinations: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string
+          description: string | null
+          google_place_id: string | null
+          id: string
+          image_url: string | null
+          latitude: number | null
+          longitude: number | null
+          name: string
+          place_type: string | null
+          rating: number | null
+          updated_at: string
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          description?: string | null
+          google_place_id?: string | null
+          id?: string
+          image_url?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          place_type?: string | null
+          rating?: number | null
+          updated_at?: string
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          description?: string | null
+          google_place_id?: string | null
+          id?: string
+          image_url?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          place_type?: string | null
+          rating?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      google_places: {
+        Row: {
+          created_at: string
+          formatted_address: string | null
+          geometry_lat: number | null
+          geometry_lng: number | null
+          id: string
+          name: string
+          opening_hours: string | null
+          photos: string[] | null
+          place_id: string
+          place_types: string[] | null
+          rating: number | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          created_at?: string
+          formatted_address?: string | null
+          geometry_lat?: number | null
+          geometry_lng?: number | null
+          id?: string
+          name: string
+          opening_hours?: string | null
+          photos?: string[] | null
+          place_id: string
+          place_types?: string[] | null
+          rating?: number | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          created_at?: string
+          formatted_address?: string | null
+          geometry_lat?: number | null
+          geometry_lng?: number | null
+          id?: string
+          name?: string
+          opening_hours?: string | null
+          photos?: string[] | null
+          place_id?: string
+          place_types?: string[] | null
+          rating?: number | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
           email: string | null
+          full_name: string | null
           id: string
           name: string | null
           profile_image: string | null
@@ -20,6 +117,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           email?: string | null
+          full_name?: string | null
           id: string
           name?: string | null
           profile_image?: string | null
@@ -27,11 +125,44 @@ export type Database = {
         Update: {
           created_at?: string | null
           email?: string | null
+          full_name?: string | null
           id?: string
           name?: string | null
           profile_image?: string | null
         }
         Relationships: []
+      }
+      saved_places: {
+        Row: {
+          created_at: string
+          destination_id: string
+          id: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          destination_id: string
+          id?: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          destination_id?: string
+          id?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_places_destination_id_fkey"
+            columns: ["destination_id"]
+            isOneToOne: false
+            referencedRelation: "destinations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_destinations: {
         Row: {

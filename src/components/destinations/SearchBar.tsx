@@ -1,20 +1,32 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X } from 'lucide-react';
+import { Search, X, MapPin, Star } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { useDebounce } from 'use-debounce';
 import { getGoogleMapsApiKey } from '@/config/apiConfig';
-import { usePlaceAutocomplete } from '@/utils/googleMapsService';
+import { googlePlacesService } from '@/utils/googleMapsService';
+
+interface SearchResult {
+  id: string;
+  name: string;
+  location: string;
+  imageUrl: string;
+  rating?: number;
+  isGooglePlace?: boolean;
+  place_id?: string;
+  geometry?: any;
+}
 
 const SearchBar = () => {
   const { searchDestinations, currentSearchQuery, setCurrentSearchQuery } = useDestinations();
   const [query, setQuery] = useState(currentSearchQuery);
-  const [debouncedQuery] = useDebounce(query, 300); // 300ms debounce
+  const [debouncedQuery] = useDebounce(query, 300);
   const [isSearchActive, setIsSearchActive] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -32,11 +44,87 @@ const SearchBar = () => {
     fetchApiKey();
   }, []);
   
-  // Use place autocomplete if API key is available
-  const { suggestions, isLoading, error } = usePlaceAutocomplete(
-    debouncedQuery, 
-    apiKey && debouncedQuery.length >= 3 ? apiKey : null
-  );
+  // Search functionality
+  useEffect(() => {
+    const performSearch = async () => {
+      if (debouncedQuery.length < 3) {
+        setSearchResults([]);
+        setIsSearchActive(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setIsSearchActive(true);
+
+      try {
+        // Search local destinations first
+        const localResults = searchDestinations(debouncedQuery);
+        const formattedLocalResults: SearchResult[] = localResults.slice(0, 3).map(dest => ({
+          id: dest.id,
+          name: dest.name,
+          location: dest.location,
+          imageUrl: dest.imageUrl,
+          rating: dest.rating,
+          isGooglePlace: false
+        }));
+
+        // Search Google Places if API key is available
+        let googleResults: SearchResult[] = [];
+        if (apiKey) {
+          const googleData = await googlePlacesService.searchPlaces(debouncedQuery);
+          
+          if (googleData && googleData.results) {
+            googleResults = await Promise.all(
+              googleData.results.slice(0, 5).map(async (place: any) => {
+                let imageUrl = 'https://via.placeholder.com/100';
+                
+                // Get photo if available
+                if (place.photos && place.photos.length > 0) {
+                  try {
+                    const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
+                    if (photoUrl) imageUrl = photoUrl;
+                  } catch (error) {
+                    console.error('Error getting photo:', error);
+                  }
+                }
+
+                return {
+                  id: place.place_id,
+                  name: place.name,
+                  location: place.formatted_address || '',
+                  imageUrl,
+                  rating: place.rating || 0,
+                  isGooglePlace: true,
+                  place_id: place.place_id,
+                  geometry: place.geometry
+                };
+              })
+            );
+          }
+        }
+
+        // Combine results with local first, then Google Places
+        const combinedResults = [...formattedLocalResults, ...googleResults];
+        setSearchResults(combinedResults);
+      } catch (error) {
+        console.error('Search error:', error);
+        // Fallback to local search only
+        const localResults = searchDestinations(debouncedQuery);
+        setSearchResults(localResults.slice(0, 5).map(dest => ({
+          id: dest.id,
+          name: dest.name,
+          location: dest.location,
+          imageUrl: dest.imageUrl,
+          rating: dest.rating,
+          isGooglePlace: false
+        })));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    performSearch();
+  }, [debouncedQuery, apiKey, searchDestinations]);
   
   // Handle form submission
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
@@ -52,37 +140,7 @@ const SearchBar = () => {
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newQuery = e.target.value;
     setQuery(newQuery);
-    
-    if (newQuery.trim().length > 2) {
-      // If Google Places API is not available, use local search
-      if (!apiKey) {
-        const results = searchDestinations(newQuery);
-        setSearchResults(results.slice(0, 5)); // Show max 5 results
-      }
-      setIsSearchActive(true);
-    } else {
-      setSearchResults([]);
-      setIsSearchActive(false);
-    }
   };
-
-  // Update search results when suggestions from Google Places API change
-  useEffect(() => {
-    if (suggestions && suggestions.length > 0) {
-      const formattedSuggestions = suggestions.map(suggestion => ({
-        id: suggestion.place_id,
-        name: suggestion.structured_formatting?.main_text || suggestion.description,
-        location: suggestion.structured_formatting?.secondary_text || '',
-        imageUrl: 'https://via.placeholder.com/100', // Placeholder image
-        isGooglePlace: true
-      }));
-      setSearchResults(formattedSuggestions);
-    } else if (debouncedQuery.length >= 3 && !apiKey) {
-      // Fallback to local search if no API key
-      const results = searchDestinations(debouncedQuery);
-      setSearchResults(results.slice(0, 5));
-    }
-  }, [suggestions, debouncedQuery, apiKey, searchDestinations]);
 
   // Clear search input
   const clearSearch = () => {
@@ -95,10 +153,16 @@ const SearchBar = () => {
   };
 
   // Handle search result click
-  const handleResultClick = (result: any) => {
+  const handleResultClick = (result: SearchResult) => {
     if (result.isGooglePlace) {
-      // For Google Places results, navigate to map with place ID
-      navigate(`/map`, { state: { placeId: result.id, placeName: result.name } });
+      // For Google Places results, navigate to map with place details
+      navigate(`/map`, { 
+        state: { 
+          placeId: result.place_id, 
+          placeName: result.name,
+          placeDetails: result
+        } 
+      });
     } else {
       // For local destinations
       navigate(`/destinations/${result.id}`);
@@ -149,17 +213,17 @@ const SearchBar = () => {
         )}
       </form>
 
-      {isSearchActive && searchResults.length > 0 && (
+      {isSearchActive && (
         <div className="search-results absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-80 overflow-y-auto">
           {isLoading && (
             <div className="p-3 text-center text-sm text-muted-foreground">
-              Loading suggestions...
+              Searching places...
             </div>
           )}
           
-          {!isLoading && searchResults.map(result => (
+          {!isLoading && searchResults.length > 0 && searchResults.map(result => (
             <div
-              key={result.id}
+              key={`${result.isGooglePlace ? 'google' : 'local'}-${result.id}`}
               className="flex items-center p-3 border-b last:border-b-0 cursor-pointer hover:bg-muted/50"
               onClick={() => handleResultClick(result)}
             >
@@ -168,21 +232,37 @@ const SearchBar = () => {
                   src={result.imageUrl}
                   alt={result.name}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/100';
+                  }}
                 />
               </div>
               <div className="flex-1">
-                <h4 className="font-medium text-sm">{result.name}</h4>
-                <p className="text-xs text-muted-foreground">{result.location}</p>
-                {result.isGooglePlace && (
-                  <span className="text-xs text-blue-500">Google Maps</span>
+                <h4 className="font-medium text-sm flex items-center">
+                  {result.name}
+                  {result.isGooglePlace && (
+                    <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-1 py-0.5 rounded">
+                      Google
+                    </span>
+                  )}
+                </h4>
+                <p className="text-xs text-muted-foreground flex items-center">
+                  <MapPin size={12} className="mr-1" />
+                  {result.location}
+                </p>
+                {result.rating && result.rating > 0 && (
+                  <div className="flex items-center mt-1">
+                    <Star size={12} className="text-yellow-500 mr-1" fill="currentColor" />
+                    <span className="text-xs">{result.rating.toFixed(1)}</span>
+                  </div>
                 )}
               </div>
             </div>
           ))}
           
-          {error && (
-            <div className="p-3 text-center text-sm text-red-500">
-              Error loading suggestions
+          {!isLoading && searchResults.length === 0 && query.length >= 3 && (
+            <div className="p-3 text-center text-sm text-muted-foreground">
+              No places found for "{query}"
             </div>
           )}
         </div>
