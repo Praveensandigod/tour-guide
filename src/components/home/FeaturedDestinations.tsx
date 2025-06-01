@@ -11,18 +11,23 @@ interface FeaturedDestinationsProps {
   destinations: Destination[];
 }
 
+interface EnhancedDestination extends Destination {
+  enhancedImage?: string;
+  enhancedRating?: number;
+}
+
 const FeaturedDestinations = ({ destinations }: FeaturedDestinationsProps) => {
   const { ref, inView } = useInView({
     threshold: 0.2,
     triggerOnce: true,
   });
 
-  const [enhancedDestinations, setEnhancedDestinations] = useState<Array<Destination & { enhancedImage?: string; enhancedRating?: number }>>([]);
+  const [enhancedDestinations, setEnhancedDestinations] = useState<EnhancedDestination[]>([]);
 
   useEffect(() => {
     const enhanceDestinations = async () => {
       const enhanced = await Promise.all(
-        destinations.map(async (destination) => {
+        destinations.map(async (destination): Promise<EnhancedDestination> => {
           try {
             const searchResults = await googlePlacesService.searchPlaces(destination.name);
             
@@ -77,7 +82,7 @@ const FeaturedDestinations = ({ destinations }: FeaturedDestinationsProps) => {
             >
               <div className="relative overflow-hidden rounded-lg h-64">
                 <img
-                  src={destination.enhancedImage || destination.imageUrl}
+                  src={(destination as EnhancedDestination).enhancedImage || destination.imageUrl}
                   alt={destination.name}
                   className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                 />
@@ -91,7 +96,7 @@ const FeaturedDestinations = ({ destinations }: FeaturedDestinationsProps) => {
                         <Star
                           key={i}
                           className={`w-4 h-4 ${
-                            i < Math.floor(destination.enhancedRating || destination.rating)
+                            i < Math.floor((destination as EnhancedDestination).enhancedRating || destination.rating)
                               ? 'text-yellow-500'
                               : 'text-gray-400'
                           }`}
@@ -100,7 +105,7 @@ const FeaturedDestinations = ({ destinations }: FeaturedDestinationsProps) => {
                       ))}
                     </div>
                     <span className="ml-1 text-sm">
-                      {(destination.enhancedRating || destination.rating).toFixed(1)}
+                      {((destination as EnhancedDestination).enhancedRating || destination.rating).toFixed(1)}
                     </span>
                   </div>
                 </div>
