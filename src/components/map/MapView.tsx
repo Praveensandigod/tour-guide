@@ -38,7 +38,6 @@ const MapView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
   const [isSpeakingDirections, setIsSpeakingDirections] = useState(false);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const speechSynthesis = window.speechSynthesis;
   const speechUtterance = useRef<SpeechSynthesisUtterance | null>(null);
   
@@ -53,7 +52,7 @@ const MapView = () => {
         console.error("Error fetching API key:", error);
         toast({
           title: "API Key Error",
-          description: "Failed to load the map API key from the server. Please try again later.",
+          description: "Failed to load the map API key from the server.",
           variant: "destructive"
         });
       } finally {
@@ -70,12 +69,11 @@ const MapView = () => {
 
     const loadGoogleMapsScript = () => {
       const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,directions&callback=initMap`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry&callback=googleMapsCallback`;
       script.async = true;
       script.defer = true;
       
-      // Create global callback
-      window.initMap = () => {
+      window.googleMapsCallback = () => {
         setMapLoaded(true);
       };
       
@@ -83,7 +81,7 @@ const MapView = () => {
       
       return () => {
         document.head.removeChild(script);
-        delete window.initMap;
+        delete window.googleMapsCallback;
       };
     };
 
@@ -99,26 +97,17 @@ const MapView = () => {
   useEffect(() => {
     if (!mapLoaded || !mapContainerRef.current || !window.google) return;
     
-    // Initialize map
     const map = new window.google.maps.Map(mapContainerRef.current, {
-      center: { lat: 20.5937, lng: 78.9629 }, // Center on India
+      center: { lat: 20.5937, lng: 78.9629 },
       zoom: 5,
       streetViewControl: false,
       mapTypeControl: true,
       fullscreenControl: true,
-      styles: [
-        {
-          featureType: "poi",
-          elementType: "labels",
-          stylers: [{ visibility: "on" }]
-        }
-      ]
     });
     
     mapRef.current = map;
     directionsServiceRef.current = new window.google.maps.DirectionsService();
     
-    // Initialize DirectionsRenderer with custom styling
     if (!directionsRendererRef.current) {
       directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
         suppressMarkers: false,
@@ -143,7 +132,6 @@ const MapView = () => {
         }
       });
       
-      // Add info window
       const infoWindow = new window.google.maps.InfoWindow({
         content: `
           <div style="padding: 10px;">
@@ -171,7 +159,6 @@ const MapView = () => {
         setEndLocation(destination.name);
       }
     } else if (selectedPlaceId && selectedPlaceName) {
-      // Handle Google Place
       handleGooglePlace(selectedPlaceId, map);
     }
   }, [mapLoaded, destinations, selectedDestinationId, selectedPlaceId, selectedPlaceName]);
@@ -185,7 +172,6 @@ const MapView = () => {
         map.setCenter(location);
         map.setZoom(14);
         
-        // Create custom marker for Google Place
         const marker = new window.google.maps.Marker({
           position: location,
           map,
@@ -196,7 +182,6 @@ const MapView = () => {
           }
         });
         
-        // Create info window with place details
         const infoWindow = new window.google.maps.InfoWindow({
           content: `
             <div style="padding: 10px; max-width: 250px;">
@@ -208,9 +193,6 @@ const MapView = () => {
                   <span style="margin-left: 2px;">${placeDetails.rating}</span>
                 </div>
               ` : ''}
-              ${placeDetails.website ? `
-                <a href="${placeDetails.website}" target="_blank" style="color: #3887be; text-decoration: none; font-size: 12px;">Visit Website</a>
-              ` : ''}
             </div>
           `
         });
@@ -219,9 +201,7 @@ const MapView = () => {
           infoWindow.open(map, marker);
         });
         
-        // Open info window immediately
         infoWindow.open(map, marker);
-        
         setEndLocation(placeDetails.name);
       }
     } catch (error) {
@@ -241,7 +221,7 @@ const MapView = () => {
     if (!directionsServiceRef.current || !mapRef.current) {
       toast({
         title: "Map Not Ready",
-        description: "The map services are still loading. Please try again in a moment.",
+        description: "The map services are still loading.",
       });
       return;
     }
@@ -263,16 +243,14 @@ const MapView = () => {
         
         toast({
           title: "Directions Found",
-          description: `Route found! Distance: ${leg.distance?.text}, Duration: ${leg.duration?.text}`,
+          description: `Distance: ${leg.distance?.text}, Duration: ${leg.duration?.text}`,
         });
-      } else {
-        throw new Error('No routes found');
       }
     } catch (error) {
       console.error("Error calculating directions:", error);
       toast({
         title: "Direction Error",
-        description: "An error occurred while getting directions. Please try again.",
+        description: "An error occurred while getting directions.",
         variant: "destructive"
       });
     } finally {
@@ -284,7 +262,7 @@ const MapView = () => {
     if (!directionsResponse?.routes?.[0]?.legs?.[0]?.steps) {
       toast({
         title: "No Directions",
-        description: "Please get directions first before using voice guidance.",
+        description: "Please get directions first.",
       });
       return;
     }
@@ -308,33 +286,15 @@ const MapView = () => {
       directionsText += `Step ${index + 1}: ${instruction} for ${step.distance?.text}. `;
     });
     
-    if (steps.length > 8) {
-      directionsText += "Additional steps are shown on the map.";
-    }
-    
     speechUtterance.current = new SpeechSynthesisUtterance(directionsText);
     speechUtterance.current.rate = 0.9;
-    speechUtterance.current.pitch = 1;
-    speechUtterance.current.volume = 1;
-    
-    speechUtterance.current.onend = () => {
-      setIsSpeakingDirections(false);
-    };
-    
-    speechUtterance.current.onerror = () => {
-      setIsSpeakingDirections(false);
-      toast({
-        title: "Voice Guidance Error",
-        description: "There was an error with the voice guidance.",
-        variant: "destructive"
-      });
-    };
+    speechUtterance.current.onend = () => setIsSpeakingDirections(false);
+    speechUtterance.current.onerror = () => setIsSpeakingDirections(false);
     
     setIsSpeakingDirections(true);
     speechSynthesis.speak(speechUtterance.current);
   };
   
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (speechUtterance.current) {
@@ -343,7 +303,6 @@ const MapView = () => {
     };
   }, []);
   
-  // Show loading state while fetching API key
   if (isLoadingKey) {
     return (
       <div className="h-[80vh] w-full flex items-center justify-center">
@@ -355,7 +314,6 @@ const MapView = () => {
     );
   }
   
-  // Show error if API key couldn't be loaded
   if (!apiKey && !isLoadingKey) {
     return (
       <div className="h-[80vh] w-full flex items-center justify-center p-4">
@@ -364,22 +322,12 @@ const MapView = () => {
             {isAuthenticated ? (
               <>
                 <h3 className="text-xl font-bold mb-2">Map Unavailable</h3>
-                <p className="mb-4">
-                  The map API key could not be loaded from the server. Please try again later or contact support.
-                </p>
+                <p className="mb-4">The map API key could not be loaded.</p>
               </>
             ) : (
               <>
                 <h3 className="text-xl font-bold mb-2">Authentication Required</h3>
-                <p className="mb-4">
-                  You need to be logged in to access the map feature.
-                </p>
-                <Button
-                  className="w-full"
-                  onClick={() => window.location.href = '/login'}
-                >
-                  Log In to Access Maps
-                </Button>
+                <p className="mb-4">You need to be logged in to access the map feature.</p>
               </>
             )}
           </CardContent>
@@ -388,7 +336,6 @@ const MapView = () => {
     );
   }
 
-  // Show loading state while Google Maps API is loading
   if (!mapLoaded) {
     return (
       <div className="h-[80vh] w-full flex items-center justify-center">
@@ -402,10 +349,8 @@ const MapView = () => {
 
   return (
     <div className="h-[80vh] w-full relative">
-      {/* Google Map Container */}
       <div ref={mapContainerRef} className="w-full h-full rounded-lg" />
       
-      {/* Directions Panel */}
       <Card className="absolute top-4 left-4 w-[320px] z-10 shadow-lg">
         <CardContent className="p-4">
           <div className="mb-2">
@@ -451,18 +396,17 @@ const MapView = () => {
               >
                 {isSpeakingDirections ? (
                   <>
-                    <VolumeX className="mr-2 h-4 w-4" /> Stop Voice Guidance
+                    <VolumeX className="mr-2 h-4 w-4" /> Stop Voice
                   </>
                 ) : (
                   <>
-                    <Volume2 className="mr-2 h-4 w-4" /> Start Voice Guidance
+                    <Volume2 className="mr-2 h-4 w-4" /> Voice Guidance
                   </>
                 )}
               </Button>
               
-              {/* Turn-by-turn directions */}
               <div className="max-h-40 overflow-y-auto">
-                <h4 className="text-sm font-semibold mb-2">Turn-by-turn directions:</h4>
+                <h4 className="text-sm font-semibold mb-2">Directions:</h4>
                 {directionsResponse.routes[0].legs[0].steps.slice(0, 5).map((step, index) => (
                   <div key={index} className="text-xs mb-2 p-2 bg-muted rounded">
                     <div className="flex items-center">
@@ -481,11 +425,6 @@ const MapView = () => {
                     <div className="text-gray-500 mt-1">{step.distance?.text}</div>
                   </div>
                 ))}
-                {directionsResponse.routes[0].legs[0].steps.length > 5 && (
-                  <p className="text-xs text-muted-foreground">
-                    +{directionsResponse.routes[0].legs[0].steps.length - 5} more steps...
-                  </p>
-                )}
               </div>
             </div>
           )}

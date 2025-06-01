@@ -1,6 +1,10 @@
 
-// Add window augmentation for Google Maps callback
-interface Window {
-  googleMapsCallback?: () => void;
-  google: any;
+declare global {
+  interface Window {
+    initMap?: () => void;
+    google?: typeof google;
+    googleMapsCallback?: () => void;
+  }
 }
+
+export {};

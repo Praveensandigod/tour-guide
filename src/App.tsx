@@ -1,65 +1,43 @@
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from 'react-query';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { DestinationProvider } from '@/contexts/DestinationContext';
+import HomePage from '@/pages/HomePage';
+import SearchResultsPage from '@/pages/SearchResultsPage';
+import RecommendationsPage from '@/pages/RecommendationsPage';
+import DestinationDetailPage from '@/pages/DestinationDetailPage';
+import MapPage from '@/pages/MapPage';
+import LoginPage from '@/pages/LoginPage';
+import SignupPage from '@/pages/SignupPage';
+import ProfilePage from '@/pages/ProfilePage';
+import { Toaster } from '@/components/ui/toaster';
+import PlaceDetailPage from '@/pages/PlaceDetailPage';
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { DestinationProvider } from "@/contexts/DestinationContext";
-
-// Layouts
-import AppLayout from "./components/layout/AppLayout";
-
-// Pages
-import HomePage from "./pages/HomePage";
-import RecommendationsPage from "./pages/RecommendationsPage";
-import MapPage from "./pages/MapPage";
-import SavedPage from "./pages/SavedPage";
-import ProfilePage from "./pages/ProfilePage";
-import SearchResultsPage from "./pages/SearchResultsPage";
-import DestinationDetailPage from "./pages/DestinationDetailPage";
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
-import NotFound from "./pages/NotFound";
-import VerificationSuccessPage from "./pages/VerificationSuccessPage";
-import AccountDeletedPage from "./pages/AccountDeletedPage";
-
-// Initialize the query client
-const queryClient = new QueryClient();
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <DestinationProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<AppLayout />}>
-                <Route index element={<HomePage />} />
-                <Route path="recommendations" element={<RecommendationsPage />} />
-                <Route path="map" element={<MapPage />} />
-                <Route path="saved" element={<SavedPage />} />
-                <Route path="profile" element={<ProfilePage />} />
-                <Route path="search" element={<SearchResultsPage />} />
-                <Route path="destinations/:id" element={<DestinationDetailPage />} />
-              </Route>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/verification-success" element={<VerificationSuccessPage />} />
-              <Route path="/account-deleted" element={<AccountDeletedPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </DestinationProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+function App() {
+  return (
+    <Router>
+      <QueryClientProvider client={new QueryClient()}>
+        <AuthProvider>
+          <DestinationProvider>
+            <div className="min-h-screen bg-background">
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/search" element={<SearchResultsPage />} />
+                <Route path="/recommendations" element={<RecommendationsPage />} />
+                <Route path="/destinations/:id" element={<DestinationDetailPage />} />
+                <Route path="/map" element={<MapPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/places/:id" element={<PlaceDetailPage />} />
+              </Routes>
+              <Toaster />
+            </div>
+          </DestinationProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </Router>
+  );
+}
 
 export default App;

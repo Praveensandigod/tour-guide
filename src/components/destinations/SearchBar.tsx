@@ -103,12 +103,10 @@ const SearchBar = () => {
           }
         }
 
-        // Combine results with local first, then Google Places
         const combinedResults = [...formattedLocalResults, ...googleResults];
         setSearchResults(combinedResults);
       } catch (error) {
         console.error('Search error:', error);
-        // Fallback to local search only
         const localResults = searchDestinations(debouncedQuery);
         setSearchResults(localResults.slice(0, 5).map(dest => ({
           id: dest.id,
@@ -126,7 +124,6 @@ const SearchBar = () => {
     performSearch();
   }, [debouncedQuery, apiKey, searchDestinations]);
   
-  // Handle form submission
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (query.trim()) {
@@ -136,13 +133,11 @@ const SearchBar = () => {
     }
   };
 
-  // Handle input changes
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newQuery = e.target.value;
     setQuery(newQuery);
   };
 
-  // Clear search input
   const clearSearch = () => {
     setQuery('');
     setSearchResults([]);
@@ -152,25 +147,24 @@ const SearchBar = () => {
     }
   };
 
-  // Handle search result click
   const handleResultClick = (result: SearchResult) => {
     if (result.isGooglePlace) {
-      // For Google Places results, navigate to map with place details
-      navigate(`/map`, { 
+      // Navigate to PlaceDetailPage for Google Places
+      navigate(`/places/google-${result.id}`, { 
         state: { 
           placeId: result.place_id, 
           placeName: result.name,
-          placeDetails: result
+          placeDetails: result,
+          isGooglePlace: true
         } 
       });
     } else {
-      // For local destinations
-      navigate(`/destinations/${result.id}`);
+      // Navigate to PlaceDetailPage for local destinations
+      navigate(`/places/${result.id}`);
     }
     setIsSearchActive(false);
   };
 
-  // Close search results when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -206,7 +200,6 @@ const SearchBar = () => {
             type="button"
             onClick={clearSearch}
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            aria-label="Clear search"
           >
             <X size={18} />
           </button>
