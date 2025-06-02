@@ -1,15 +1,14 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { MapPin, ArrowRight, Volume2, VolumeX, Loader2, Navigation, ArrowLeft, RotateCcw } from 'lucide-react';
+import { MapPin, Loader2, Plus } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { getGoogleMapsApiKey } from '@/config/apiConfig';
 import { useAuth } from '@/contexts/AuthContext';
 import { googlePlacesService } from '@/utils/googleMapsService';
+import FloatingDirectionsBox from './FloatingDirectionsBox';
 
 const MapView = () => {
   const { destinations } = useDestinations();
@@ -41,6 +40,9 @@ const MapView = () => {
   const [isSpeakingDirections, setIsSpeakingDirections] = useState(false);
   const speechSynthesis = window.speechSynthesis;
   const speechUtterance = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // Add state for floating box visibility
+  const [showFloatingBox, setShowFloatingBox] = useState(false);
   
   // Fetch API key on component mount
   useEffect(() => {
@@ -393,94 +395,32 @@ const MapView = () => {
     <div className="h-[80vh] w-full relative">
       <div ref={mapContainerRef} className="w-full h-full rounded-lg" />
       
-      <Card className="absolute top-4 left-4 w-[320px] z-10 shadow-lg">
-        <CardContent className="p-4">
-          <div className="mb-2">
-            <label className="block mb-1 text-sm font-medium">Start Location</label>
-            <Input 
-              placeholder="Enter start location"
-              value={startLocation}
-              onChange={(e) => setStartLocation(e.target.value)}
-              className="mb-2"
-            />
-          </div>
-          
-          <div className="mb-4">
-            <label className="block mb-1 text-sm font-medium">Destination</label>
-            <Input 
-              placeholder="Enter destination"
-              value={endLocation}
-              onChange={(e) => setEndLocation(e.target.value)}
-              className="mb-2"
-            />
-          </div>
-          
-          <Button 
-            className="w-full mb-2" 
-            onClick={handleDirections}
-            disabled={isLoading || !startLocation || !endLocation}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              <>
-                Get Directions
-                <ArrowRight size={16} className="ml-2" />
-              </>
-            )}
-          </Button>
-          
-          {directionsResponse && directionsResponse.routes && directionsResponse.routes.length > 0 && (
-            <div className="mt-4">
-              <div className="text-sm mb-2">
-                <p className="font-bold">Distance: {directionsResponse.routes[0].legs[0].distance?.text}</p>
-                <p className="font-bold">Duration: {directionsResponse.routes[0].legs[0].duration?.text}</p>
-              </div>
-              
-              <Button 
-                variant="outline" 
-                className="w-full flex justify-center items-center mb-2" 
-                onClick={speakDirections}
-              >
-                {isSpeakingDirections ? (
-                  <>
-                    <VolumeX className="mr-2 h-4 w-4" /> Stop Voice
-                  </>
-                ) : (
-                  <>
-                    <Volume2 className="mr-2 h-4 w-4" /> Voice Guidance
-                  </>
-                )}
-              </Button>
-              
-              <div className="max-h-40 overflow-y-auto">
-                <h4 className="text-sm font-semibold mb-2">Directions:</h4>
-                {directionsResponse.routes[0].legs[0].steps.slice(0, 5).map((step, index) => (
-                  <div key={index} className="text-xs mb-2 p-2 bg-muted rounded">
-                    <div className="flex items-center">
-                      {step.maneuver?.includes('left') && <ArrowLeft size={12} className="mr-1" />}
-                      {step.maneuver?.includes('right') && <ArrowRight size={12} className="mr-1" />}
-                      {step.maneuver?.includes('straight') && <ArrowRight size={12} className="mr-1" />}
-                      {step.maneuver?.includes('turn') && <RotateCcw size={12} className="mr-1" />}
-                      <span className="font-semibold mr-1">{index + 1}.</span>
-                    </div>
-                    <div 
-                      dangerouslySetInnerHTML={{ 
-                        __html: step.instructions.replace(/<b>/g, '<strong>').replace(/<\/b>/g, '</strong>') 
-                      }} 
-                      className="mt-1"
-                    />
-                    <div className="text-gray-500 mt-1">{step.distance?.text}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Floating Directions Toggle Button */}
+      {!showFloatingBox && (
+        <Button
+          className="fixed top-4 left-4 z-40 shadow-lg"
+          onClick={() => setShowFloatingBox(true)}
+          size="sm"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Directions
+        </Button>
+      )}
+
+      {/* Floating Directions Box */}
+      {showFloatingBox && (
+        <FloatingDirectionsBox
+          startLocation={startLocation}
+          endLocation={endLocation}
+          setStartLocation={setStartLocation}
+          setEndLocation={setEndLocation}
+          handleDirections={handleDirections}
+          isLoading={isLoading}
+          directionsResponse={directionsResponse}
+          speakDirections={speakDirections}
+          isSpeakingDirections={isSpeakingDirections}
+        />
+      )}
     </div>
   );
 };
