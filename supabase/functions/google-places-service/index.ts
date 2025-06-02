@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { action, query, placeId, origin, destination, language = 'en' } = await req.json();
+    const { action, query, placeId, origin, destination, language = 'en', city, location, radius, type, maxWidth = 400 } = await req.json();
     
     // Get API key
     let apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
@@ -30,6 +30,7 @@ serve(async (req) => {
 
     switch (action) {
       case 'search_places':
+      case 'search_tourist_places':
         // Text search for places
         const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}&fields=place_id,name,formatted_address,geometry,rating,photos,types,business_status`;
         
@@ -37,8 +38,25 @@ serve(async (req) => {
         const searchData = await searchResponse.json();
         
         if (searchData.status === 'OK') {
+          // Filter for tourist attractions if it's a tourist search
+          let filteredResults = searchData.results;
+          if (action === 'search_tourist_places') {
+            filteredResults = searchData.results.filter(place => 
+              place.types?.includes('tourist_attraction') ||
+              place.types?.includes('museum') ||
+              place.types?.includes('park') ||
+              place.types?.includes('amusement_park') ||
+              place.types?.includes('church') ||
+              place.types?.includes('hindu_temple') ||
+              place.types?.includes('mosque') ||
+              place.types?.includes('synagogue') ||
+              place.types?.includes('zoo') ||
+              place.types?.includes('aquarium')
+            );
+          }
+          
           // Cache results in database
-          for (const place of searchData.results) {
+          for (const place of filteredResults) {
             const { error } = await supabase
               .from('google_places')
               .upsert({
@@ -57,7 +75,7 @@ serve(async (req) => {
           }
           
           result = {
-            results: searchData.results.map(place => ({
+            results: filteredResults.map(place => ({
               place_id: place.place_id,
               name: place.name,
               formatted_address: place.formatted_address,
@@ -70,6 +88,31 @@ serve(async (req) => {
           };
         } else {
           result = { results: [], status: searchData.status, error: searchData.error_message };
+        }
+        break;
+
+      case 'nearby_search':
+        // Nearby search for tourist attractions
+        const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location}&radius=${radius}&type=${type}&key=${apiKey}`;
+        
+        const nearbyResponse = await fetch(nearbyUrl);
+        const nearbyData = await nearbyResponse.json();
+        
+        if (nearbyData.status === 'OK') {
+          result = {
+            results: nearbyData.results.map(place => ({
+              place_id: place.place_id,
+              name: place.name,
+              formatted_address: place.vicinity,
+              rating: place.rating || 0,
+              geometry: place.geometry,
+              photos: place.photos || [],
+              types: place.types || []
+            })),
+            status: 'OK'
+          };
+        } else {
+          result = { results: [], status: nearbyData.status, error: nearbyData.error_message };
         }
         break;
 
@@ -116,13 +159,13 @@ serve(async (req) => {
 
       case 'get_photo':
         // Get photo URL
-        const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${query}&key=${apiKey}`;
+        const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${query}&key=${apiKey}`;
         result = { photo_url: photoUrl };
         break;
 
       case 'autocomplete':
         // Place autocomplete
-        const autocompleteUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&types=establishment|tourist_attraction&components=country:in`;
+        const autocompleteUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&types=establishment|tourist_attraction`;
         
         const autocompleteResponse = await fetch(autocompleteUrl);
         const autocompleteData = await autocompleteResponse.json();

@@ -18,6 +18,21 @@ export const googlePlacesService = {
     }
   },
 
+  searchTouristPlaces: async (cityName: string) => {
+    try {
+      const query = `tourist attractions in ${cityName}`;
+      const { data, error } = await supabase.functions.invoke('google-places-service', {
+        body: { action: 'search_tourist_places', query, city: cityName }
+      });
+      
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error searching tourist places:', error);
+      return null;
+    }
+  },
+
   getPlaceDetails: async (placeId: string) => {
     try {
       const { data, error } = await supabase.functions.invoke('google-places-service', {
@@ -28,6 +43,25 @@ export const googlePlacesService = {
       return data;
     } catch (error) {
       console.error('Error getting place details:', error);
+      return null;
+    }
+  },
+
+  getNearbyTouristAttractions: async (lat: number, lng: number, radius: number = 5000) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('google-places-service', {
+        body: { 
+          action: 'nearby_search', 
+          location: `${lat},${lng}`,
+          radius,
+          type: 'tourist_attraction'
+        }
+      });
+      
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error getting nearby attractions:', error);
       return null;
     }
   },
@@ -46,10 +80,10 @@ export const googlePlacesService = {
     }
   },
 
-  getPhotoUrl: async (photoReference: string) => {
+  getPhotoUrl: async (photoReference: string, maxWidth: number = 400) => {
     try {
       const { data, error } = await supabase.functions.invoke('google-places-service', {
-        body: { action: 'get_photo', query: photoReference }
+        body: { action: 'get_photo', query: photoReference, maxWidth }
       });
       
       if (error) throw error;

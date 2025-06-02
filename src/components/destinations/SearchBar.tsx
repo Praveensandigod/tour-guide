@@ -17,6 +17,7 @@ interface SearchResult {
   isGooglePlace?: boolean;
   place_id?: string;
   geometry?: any;
+  types?: string[];
 }
 
 const SearchBar = () => {
@@ -27,6 +28,7 @@ const SearchBar = () => {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchMode, setSearchMode] = useState<'places' | 'cities'>('places');
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -44,6 +46,16 @@ const SearchBar = () => {
     fetchApiKey();
   }, []);
   
+  // Detect if query is a city search
+  useEffect(() => {
+    const cityKeywords = ['city', 'in', 'places in', 'tourist places', 'attractions in', 'visit'];
+    const isCity = cityKeywords.some(keyword => 
+      debouncedQuery.toLowerCase().includes(keyword)
+    ) || debouncedQuery.split(' ').length <= 2; // Simple city name
+    
+    setSearchMode(isCity ? 'cities' : 'places');
+  }, [debouncedQuery]);
+  
   // Search functionality
   useEffect(() => {
     const performSearch = async () => {
@@ -57,53 +69,98 @@ const SearchBar = () => {
       setIsSearchActive(true);
 
       try {
-        // Search local destinations first
-        const localResults = searchDestinations(debouncedQuery);
-        const formattedLocalResults: SearchResult[] = localResults.slice(0, 3).map(dest => ({
-          id: dest.id,
-          name: dest.name,
-          location: dest.location,
-          imageUrl: dest.imageUrl,
-          rating: dest.rating,
-          isGooglePlace: false
-        }));
+        let combinedResults: SearchResult[] = [];
 
-        // Search Google Places if API key is available
-        let googleResults: SearchResult[] = [];
-        if (apiKey) {
-          const googleData = await googlePlacesService.searchPlaces(debouncedQuery);
+        if (searchMode === 'cities') {
+          // Search for tourist places in the city
+          const cityName = debouncedQuery.replace(/tourist places|attractions|places in|city|in|visit/gi, '').trim();
+          const touristQuery = `tourist attractions in ${cityName}`;
           
-          if (googleData && googleData.results) {
-            googleResults = await Promise.all(
-              googleData.results.slice(0, 5).map(async (place: any) => {
-                let imageUrl = 'https://via.placeholder.com/100';
-                
-                // Get photo if available
-                if (place.photos && place.photos.length > 0) {
-                  try {
-                    const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
-                    if (photoUrl) imageUrl = photoUrl;
-                  } catch (error) {
-                    console.error('Error getting photo:', error);
+          if (apiKey) {
+            const googleData = await googlePlacesService.searchPlaces(touristQuery);
+            
+            if (googleData && googleData.results) {
+              const touristPlaces = await Promise.all(
+                googleData.results.slice(0, 8).map(async (place: any) => {
+                  let imageUrl = 'https://via.placeholder.com/300x200';
+                  
+                  if (place.photos && place.photos.length > 0) {
+                    try {
+                      const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
+                      if (photoUrl) imageUrl = photoUrl;
+                    } catch (error) {
+                      console.error('Error getting photo:', error);
+                    }
                   }
-                }
 
-                return {
-                  id: place.place_id,
-                  name: place.name,
-                  location: place.formatted_address || '',
-                  imageUrl,
-                  rating: place.rating || 0,
-                  isGooglePlace: true,
-                  place_id: place.place_id,
-                  geometry: place.geometry
-                };
-              })
-            );
+                  return {
+                    id: place.place_id,
+                    name: place.name,
+                    location: place.formatted_address || '',
+                    imageUrl,
+                    rating: place.rating || 0,
+                    isGooglePlace: true,
+                    place_id: place.place_id,
+                    geometry: place.geometry,
+                    types: place.types || []
+                  };
+                })
+              );
+              
+              combinedResults = touristPlaces;
+            }
           }
+        } else {
+          // Regular place search
+          // Search local destinations first
+          const localResults = searchDestinations(debouncedQuery);
+          const formattedLocalResults: SearchResult[] = localResults.slice(0, 3).map(dest => ({
+            id: dest.id,
+            name: dest.name,
+            location: dest.location,
+            imageUrl: dest.imageUrl,
+            rating: dest.rating,
+            isGooglePlace: false
+          }));
+
+          // Search Google Places if API key is available
+          let googleResults: SearchResult[] = [];
+          if (apiKey) {
+            const googleData = await googlePlacesService.searchPlaces(debouncedQuery);
+            
+            if (googleData && googleData.results) {
+              googleResults = await Promise.all(
+                googleData.results.slice(0, 5).map(async (place: any) => {
+                  let imageUrl = 'https://via.placeholder.com/100';
+                  
+                  if (place.photos && place.photos.length > 0) {
+                    try {
+                      const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
+                      if (photoUrl) imageUrl = photoUrl;
+                    } catch (error) {
+                      console.error('Error getting photo:', error);
+                    }
+                  }
+
+                  return {
+                    id: place.place_id,
+                    name: place.name,
+                    location: place.formatted_address || '',
+                    imageUrl,
+                    rating: place.rating || 0,
+                    isGooglePlace: true,
+                    place_id: place.place_id,
+                    geometry: place.geometry,
+                    types: place.types || []
+                  };
+                })
+              );
+            }
+          }
+
+          combinedResults = [...formattedLocalResults, ...googleResults];
         }
 
-        const combinedResults = [...formattedLocalResults, ...googleResults];
         setSearchResults(combinedResults);
       } catch (error) {
         console.error('Search error:', error);
@@ -122,14 +179,20 @@ const SearchBar = () => {
     };
 
     performSearch();
-  }, [debouncedQuery, apiKey, searchDestinations]);
+  }, [debouncedQuery, apiKey, searchDestinations, searchMode]);
   
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (query.trim()) {
       setCurrentSearchQuery(query);
       setIsSearchActive(false);
-      navigate(`/search?q=${encodeURIComponent(query)}`);
+      
+      if (searchMode === 'cities') {
+        // Navigate to city results page
+        navigate(`/search?q=${encodeURIComponent(query)}&type=city`);
+      } else {
+        navigate(`/search?q=${encodeURIComponent(query)}`);
+      }
     }
   };
 
@@ -149,7 +212,6 @@ const SearchBar = () => {
 
   const handleResultClick = (result: SearchResult) => {
     if (result.isGooglePlace) {
-      // Navigate to PlaceDetailPage for Google Places
       navigate(`/places/google-${result.id}`, { 
         state: { 
           placeId: result.place_id, 
@@ -159,7 +221,6 @@ const SearchBar = () => {
         } 
       });
     } else {
-      // Navigate to PlaceDetailPage for local destinations
       navigate(`/places/${result.id}`);
     }
     setIsSearchActive(false);
@@ -188,7 +249,7 @@ const SearchBar = () => {
         <Input
           ref={inputRef}
           type="search"
-          placeholder="Search destinations..."
+          placeholder={searchMode === 'cities' ? "Search tourist places in city..." : "Search destinations..."}
           value={query}
           onChange={handleQueryChange}
           onFocus={() => query.trim().length > 2 && setIsSearchActive(true)}
@@ -208,9 +269,17 @@ const SearchBar = () => {
 
       {isSearchActive && (
         <div className="search-results absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-80 overflow-y-auto">
+          {searchMode === 'cities' && (
+            <div className="p-2 bg-blue-50 border-b">
+              <p className="text-xs text-blue-600 font-medium">
+                🏛️ Tourist Places Search Mode
+              </p>
+            </div>
+          )}
+          
           {isLoading && (
             <div className="p-3 text-center text-sm text-muted-foreground">
-              Searching places...
+              {searchMode === 'cities' ? 'Finding tourist places...' : 'Searching places...'}
             </div>
           )}
           
@@ -238,6 +307,11 @@ const SearchBar = () => {
                       Google
                     </span>
                   )}
+                  {searchMode === 'cities' && (
+                    <span className="ml-2 text-xs bg-green-100 text-green-600 px-1 py-0.5 rounded">
+                      Tourist
+                    </span>
+                  )}
                 </h4>
                 <p className="text-xs text-muted-foreground flex items-center">
                   <MapPin size={12} className="mr-1" />
@@ -255,7 +329,10 @@ const SearchBar = () => {
           
           {!isLoading && searchResults.length === 0 && query.length >= 3 && (
             <div className="p-3 text-center text-sm text-muted-foreground">
-              No places found for "{query}"
+              {searchMode === 'cities' 
+                ? `No tourist places found for "${query}"`
+                : `No places found for "${query}"`
+              }
             </div>
           )}
         </div>

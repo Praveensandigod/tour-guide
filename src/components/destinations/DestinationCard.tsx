@@ -17,10 +17,13 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   const [imageUrl, setImageUrl] = useState(destination.imageUrl);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Fetch enhanced data from Google Places API
+  // Check if this is a Google Places result
+  const isGooglePlace = destination.id.startsWith('google-') || destination.isGooglePlace;
+  
+  // Fetch enhanced data from Google Places API for local destinations
   useEffect(() => {
     const fetchEnhancedData = async () => {
-      if (!destination.name) return;
+      if (!destination.name || isGooglePlace) return;
       
       setIsLoading(true);
       try {
@@ -53,7 +56,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
     };
     
     fetchEnhancedData();
-  }, [destination.name]);
+  }, [destination.name, isGooglePlace]);
   
   const getBudgetLabel = (budget: string) => {
     switch (budget) {
@@ -84,6 +87,8 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
         return <Flag size={16} className="mr-1" />;
       case 'statue':
         return <BuildingIcon size={16} className="mr-1" />;
+      case 'attraction':
+        return <LandmarkIcon size={16} className="mr-1" />;
       default:
         return null;
     }
@@ -98,9 +103,21 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   const displayName = enhancedData?.name || destination.name;
   const displayAddress = enhancedData?.formatted_address || destination.location;
   
+  // For Google Places, use the place_id for navigation
+  const placeId = destination.place_id || destination.id.replace('google-', '');
+  
   return (
     <div className="destination-card group cursor-pointer">
-      <Link to={`/places/${destination.id}`} className="block">
+      <Link 
+        to={`/places/${isGooglePlace ? `google-${placeId}` : destination.id}`}
+        state={isGooglePlace ? {
+          placeId: placeId,
+          placeName: displayName,
+          isGooglePlace: true,
+          placeDetails: destination
+        } : undefined}
+        className="block"
+      >
         <div className="relative">
           <img
             src={imageUrl}
@@ -109,6 +126,8 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             onError={(e) => {
               if (imageUrl !== destination.imageUrl) {
                 setImageUrl(destination.imageUrl);
+              } else {
+                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300';
               }
             }}
           />
@@ -137,7 +156,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             {getCategoryLabel(destination.category)}
           </div>
           
-          {enhancedData && (
+          {(enhancedData || isGooglePlace) && (
             <div className="absolute top-2 left-2 bg-green-600/80 text-white px-2 py-0.5 rounded-full text-xs">
               Google Enhanced
             </div>
@@ -147,7 +166,9 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
         <div className="p-4">
           <div className="flex justify-between items-start mb-2">
             <h3 className="font-bold text-lg truncate">{displayName}</h3>
-            <span className={budgetInfo.class}>{budgetInfo.label}</span>
+            {budgetInfo.label && (
+              <span className={budgetInfo.class}>{budgetInfo.label}</span>
+            )}
           </div>
           
           <p className="text-sm text-muted-foreground mb-2">{displayAddress}</p>
@@ -174,7 +195,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
                 ))}
               </div>
               <span className="ml-1 text-xs font-medium">{displayRating.toFixed(1)}</span>
-              {enhancedData && (
+              {(enhancedData || isGooglePlace) && (
                 <span className="ml-2 text-xs text-green-600">(Google)</span>
               )}
             </div>
@@ -184,10 +205,10 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             </span>
           </div>
           
-          {enhancedData?.website && (
+          {(enhancedData?.website || destination.website) && (
             <div className="mt-2">
               <a 
-                href={enhancedData.website} 
+                href={enhancedData?.website || destination.website} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-xs text-blue-600 hover:underline"
@@ -204,9 +225,9 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
         to="/map"
         state={{ 
           destinationId: destination.id,
-          placeId: enhancedData?.place_id,
+          placeId: enhancedData?.place_id || placeId,
           placeName: displayName,
-          placeDetails: enhancedData
+          placeDetails: enhancedData || destination
         }}
         className="flex items-center justify-center gap-2 p-3 bg-muted/50 border-t text-sm font-medium hover:bg-muted transition-colors"
         onClick={(e) => e.stopPropagation()}
