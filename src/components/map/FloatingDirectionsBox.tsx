@@ -14,6 +14,7 @@ interface FloatingDirectionsBoxProps {
   directionsResponse: google.maps.DirectionsResult | null;
   speakDirections: () => void;
   isSpeakingDirections: boolean;
+  onClose: () => void;
 }
 
 const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
@@ -25,12 +26,12 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
   isLoading,
   directionsResponse,
   speakDirections,
-  isSpeakingDirections
+  isSpeakingDirections,
+  onClose
 }) => {
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -77,8 +78,6 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
     };
   }, [isDragging, dragOffset]);
 
-  if (!isVisible) return null;
-
   return (
     <Card 
       ref={cardRef}
@@ -110,7 +109,7 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
             variant="ghost"
             size="sm"
             className="h-6 w-6 p-0"
-            onClick={() => setIsVisible(false)}
+            onClick={onClose}
           >
             <X className="w-3 h-3" />
           </Button>

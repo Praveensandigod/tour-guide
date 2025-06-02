@@ -44,7 +44,6 @@ const MapView = () => {
   // Add state for floating box visibility
   const [showFloatingBox, setShowFloatingBox] = useState(false);
   
-  // Fetch API key on component mount
   useEffect(() => {
     const fetchApiKey = async () => {
       setIsLoadingKey(true);
@@ -66,7 +65,6 @@ const MapView = () => {
     fetchApiKey();
   }, [toast]);
   
-  // Load Google Maps script
   useEffect(() => {
     if (!apiKey) return;
 
@@ -100,7 +98,6 @@ const MapView = () => {
     return cleanup;
   }, [apiKey]);
   
-  // Initialize the map
   useEffect(() => {
     if (!mapLoaded || !mapContainerRef.current || !window.google) return;
     
@@ -395,10 +392,10 @@ const MapView = () => {
     <div className="h-[80vh] w-full relative">
       <div ref={mapContainerRef} className="w-full h-full rounded-lg" />
       
-      {/* Floating Directions Toggle Button */}
+      {/* Bottom Left Directions Toggle Button */}
       {!showFloatingBox && (
         <Button
-          className="fixed top-4 left-4 z-40 shadow-lg"
+          className="fixed bottom-4 left-4 z-40 shadow-lg"
           onClick={() => setShowFloatingBox(true)}
           size="sm"
         >
@@ -419,6 +416,7 @@ const MapView = () => {
           directionsResponse={directionsResponse}
           speakDirections={speakDirections}
           isSpeakingDirections={isSpeakingDirections}
+          onClose={() => setShowFloatingBox(false)}
         />
       )}
     </div>
