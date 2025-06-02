@@ -53,16 +53,27 @@ const ResetPasswordPage = () => {
   // Check if we have the hash fragment from the reset link
   useEffect(() => {
     const hash = window.location.hash;
-    const accessToken = hash.substring(1).split('&').find(param => param.startsWith('access_token='));
+    const params = new URLSearchParams(hash.substring(1));
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
     
-    if (!accessToken) {
+    if (!accessToken || !refreshToken) {
       toast({
         title: "Invalid reset link",
         description: "The password reset link is invalid or has expired. Please request a new one.",
         variant: "destructive"
       });
+      setTimeout(() => {
+        navigate('/forgot-password');
+      }, 3000);
+    } else {
+      // Set the session with the tokens from the URL
+      supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      });
     }
-  }, [toast]);
+  }, [toast, navigate]);
 
   const onSubmit = async (values: z.infer<typeof resetPasswordSchema>) => {
     try {
