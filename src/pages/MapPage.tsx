@@ -25,7 +25,7 @@ const MapPage = () => {
   }, [placeId, placeName, toast]);
 
   return (
-    <div className="h-[calc(100vh-5rem)] pb-16">
+    <div className="h-screen">
       <MapView />
     </div>
   );

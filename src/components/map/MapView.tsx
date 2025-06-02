@@ -346,7 +346,7 @@ const MapView = () => {
   
   if (isLoadingKey) {
     return (
-      <div className="h-[80vh] w-full flex items-center justify-center">
+      <div className="h-screen w-full flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-primary" />
           <p>Loading map configuration...</p>
@@ -357,7 +357,7 @@ const MapView = () => {
   
   if (!apiKey && !isLoadingKey) {
     return (
-      <div className="h-[80vh] w-full flex items-center justify-center p-4">
+      <div className="h-screen w-full flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardContent className="pt-6">
             {isAuthenticated ? (
@@ -379,7 +379,7 @@ const MapView = () => {
 
   if (!mapLoaded) {
     return (
-      <div className="h-[80vh] w-full flex items-center justify-center">
+      <div className="h-screen w-full flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p>Loading Google Maps...</p>
@@ -389,13 +389,14 @@ const MapView = () => {
   }
 
   return (
-    <div className="h-[80vh] w-full relative">
+    <div className="h-screen w-full relative">
       <div ref={mapContainerRef} className="w-full h-full rounded-lg" />
       
-      {/* Bottom Left Directions Toggle Button */}
+      {/* Directions Toggle Button - 25% above bottom left corner */}
       {!showFloatingBox && (
         <Button
-          className="fixed bottom-4 left-4 z-40 shadow-lg"
+          className="fixed left-4 z-40 shadow-lg"
+          style={{ bottom: '25vh' }}
           onClick={() => setShowFloatingBox(true)}
           size="sm"
         >
