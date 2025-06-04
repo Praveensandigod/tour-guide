@@ -1,11 +1,14 @@
 
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Search, Map, Bookmark, User } from 'lucide-react';
+import { Home, Search, Map, Bookmark, User, LogIn } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const BottomNav = () => {
   const location = useLocation();
+  const { isAuthenticated } = useAuth();
   
-  const navItems = [
+  // Navigation items for authenticated users
+  const authenticatedNavItems = [
     {
       name: 'Home',
       path: '/',
@@ -33,13 +36,29 @@ const BottomNav = () => {
     },
   ];
 
+  // Navigation items for unauthenticated users
+  const unauthenticatedNavItems = [
+    {
+      name: 'Home',
+      path: '/',
+      icon: Home,
+    },
+    {
+      name: 'Login',
+      path: '/login',
+      icon: LogIn,
+    },
+  ];
+
+  const navItems = isAuthenticated ? authenticatedNavItems : unauthenticatedNavItems;
+
   const isActive = (path: string) => {
     return location.pathname === path;
   };
   
   return (
     <div className="fixed bottom-0 left-0 right-0 border-t bg-background/90 backdrop-blur-sm z-50">
-      <div className="grid grid-cols-5 max-w-md mx-auto">
+      <div className={`grid max-w-md mx-auto ${isAuthenticated ? 'grid-cols-5' : 'grid-cols-2'}`}>
         {navItems.map((item) => (
           <Link
             key={item.name}

@@ -18,6 +18,7 @@ import SavedPage from '@/pages/SavedPage';
 import { Toaster } from '@/components/ui/toaster';
 import PlaceDetailPage from '@/pages/PlaceDetailPage';
 import BottomNav from '@/components/navigation/BottomNav';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
 function App() {
   return (
@@ -27,19 +28,50 @@ function App() {
           <DestinationProvider>
             <div className="min-h-screen bg-background">
               <Routes>
+                {/* Public routes - accessible without authentication */}
                 <Route path="/" element={<HomePage />} />
-                <Route path="/search" element={<SearchResultsPage />} />
-                <Route path="/recommendations" element={<RecommendationsPage />} />
-                <Route path="/destinations/:id" element={<DestinationDetailPage />} />
-                <Route path="/map" element={<MapPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/verification-success" element={<VerificationSuccessPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/saved" element={<SavedPage />} />
-                <Route path="/places/:id" element={<PlaceDetailPage />} />
+                
+                {/* Protected routes - require authentication */}
+                <Route path="/search" element={
+                  <ProtectedRoute>
+                    <SearchResultsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/recommendations" element={
+                  <ProtectedRoute>
+                    <RecommendationsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/destinations/:id" element={
+                  <ProtectedRoute>
+                    <DestinationDetailPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/map" element={
+                  <ProtectedRoute>
+                    <MapPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/profile" element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/saved" element={
+                  <ProtectedRoute>
+                    <SavedPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/places/:id" element={
+                  <ProtectedRoute>
+                    <PlaceDetailPage />
+                  </ProtectedRoute>
+                } />
               </Routes>
               <BottomNav />
               <Toaster />
