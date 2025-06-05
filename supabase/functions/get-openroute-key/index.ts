@@ -16,10 +16,10 @@ serve(async (req) => {
     const apiKey = Deno.env.get("OPENROUTE_API_KEY");
     
     if (!apiKey) {
-      console.log("OpenRoute API key not found, using demo key (limited usage)");
-      // Demo key for testing (very limited usage)
+      console.log("OpenRoute API key not found in environment, using provided key");
+      // Using your provided API key
       return new Response(
-        JSON.stringify({ apiKey: "5b3ce3597851110001cf6248d1c8c78e9a874d3c8d9e4b7a9b9f1c2d3e4f5g6h" }),
+        JSON.stringify({ apiKey: "5b3ce3597851110001cf6248953e793ca59140e9b20953797ecb4f89" }),
         {
           headers: {
             "Content-Type": "application/json",
@@ -30,7 +30,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Providing OpenRoute API key");
+    console.log("Providing OpenRoute API key from environment");
     
     return new Response(
       JSON.stringify({ apiKey }),

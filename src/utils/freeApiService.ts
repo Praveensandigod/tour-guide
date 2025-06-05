@@ -317,5 +317,39 @@ export const freeApiService = {
       console.error('Error getting place photos:', error);
       return [];
     }
+  },
+
+  // Get photo URL (for compatibility)
+  getPhotoUrl: async (photoReference: string) => {
+    // For free APIs, this would return the direct URL if available
+    // This is a placeholder implementation
+    return photoReference;
+  },
+
+  // Autocomplete functionality using Nominatim
+  autocomplete: async (input: string) => {
+    try {
+      const response = await fetch(
+        `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(input)}&limit=5&addressdetails=1`
+      );
+      const data = await response.json();
+      
+      return {
+        results: data.map((place: any) => ({
+          place_id: place.place_id,
+          name: place.display_name,
+          formatted_address: place.display_name,
+          geometry: {
+            location: {
+              lat: parseFloat(place.lat),
+              lng: parseFloat(place.lon)
+            }
+          }
+        }))
+      };
+    } catch (error) {
+      console.error('Error in autocomplete:', error);
+      return { results: [] };
+    }
   }
 };
