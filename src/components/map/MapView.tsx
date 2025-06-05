@@ -9,6 +9,7 @@ import { getGoogleMapsApiKey } from '@/config/apiConfig';
 import { useAuth } from '@/contexts/AuthContext';
 import { googlePlacesService } from '@/utils/googleMapsService';
 import FloatingDirectionsBox from './FloatingDirectionsBox';
+import OpenStreetMapView from './OpenStreetMapView';
 
 const MapView = () => {
   const { destinations } = useDestinations();
@@ -25,6 +26,7 @@ const MapView = () => {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [isLoadingKey, setIsLoadingKey] = useState(true);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [useOpenStreetMap, setUseOpenStreetMap] = useState(false);
   
   // Map elements
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -43,19 +45,35 @@ const MapView = () => {
 
   // Add state for floating box visibility
   const [showFloatingBox, setShowFloatingBox] = useState(false);
+
+  // OpenStreetMap state
+  const [osmMarkers, setOsmMarkers] = useState<Array<{
+    position: [number, number];
+    title: string;
+    description?: string;
+  }>>([]);
+  const [osmCenter, setOsmCenter] = useState<[number, number]>([20.5937, 78.9629]);
   
   useEffect(() => {
     const fetchApiKey = async () => {
       setIsLoadingKey(true);
       try {
         const key = await getGoogleMapsApiKey();
-        setApiKey(key);
+        if (key) {
+          setApiKey(key);
+        } else {
+          console.log('Google Maps API key not available, using OpenStreetMap');
+          setUseOpenStreetMap(true);
+          setMapLoaded(true);
+        }
       } catch (error) {
         console.error("Error fetching API key:", error);
+        console.log('Falling back to OpenStreetMap');
+        setUseOpenStreetMap(true);
+        setMapLoaded(true);
         toast({
-          title: "API Key Error",
-          description: "Failed to load the map API key from the server.",
-          variant: "destructive"
+          title: "Using Free Map Service",
+          description: "Using OpenStreetMap as the map provider.",
         });
       } finally {
         setIsLoadingKey(false);
@@ -66,7 +84,7 @@ const MapView = () => {
   }, [toast]);
   
   useEffect(() => {
-    if (!apiKey) return;
+    if (!apiKey || useOpenStreetMap) return;
 
     const loadGoogleMapsScript = () => {
       if (window.google) {
@@ -83,6 +101,12 @@ const MapView = () => {
         setMapLoaded(true);
       };
       
+      script.onerror = () => {
+        console.error('Google Maps failed to load, falling back to OpenStreetMap');
+        setUseOpenStreetMap(true);
+        setMapLoaded(true);
+      };
+      
       document.head.appendChild(script);
       
       return () => {
@@ -96,10 +120,35 @@ const MapView = () => {
 
     const cleanup = loadGoogleMapsScript();
     return cleanup;
-  }, [apiKey]);
+  }, [apiKey, useOpenStreetMap]);
+
+  // Setup OpenStreetMap markers
+  useEffect(() => {
+    if (!useOpenStreetMap) return;
+
+    const markers = destinations.map(destination => ({
+      position: [destination.coordinates.lat, destination.coordinates.lng] as [number, number],
+      title: destination.name,
+      description: `${destination.location} - Rating: ${destination.rating}/5`
+    }));
+
+    setOsmMarkers(markers);
+
+    // Handle specific destination or place
+    if (selectedDestinationId) {
+      const destination = destinations.find(d => d.id === selectedDestinationId);
+      if (destination) {
+        setOsmCenter([destination.coordinates.lat, destination.coordinates.lng]);
+        setEndLocation(destination.name);
+      }
+    } else if (selectedPlaceName) {
+      // For places from search, we'd need coordinates from the search result
+      setEndLocation(selectedPlaceName);
+    }
+  }, [useOpenStreetMap, destinations, selectedDestinationId, selectedPlaceName]);
   
   useEffect(() => {
-    if (!mapLoaded || !mapContainerRef.current || !window.google) return;
+    if (!mapLoaded || !mapContainerRef.current || !window.google || useOpenStreetMap) return;
     
     const map = new window.google.maps.Map(mapContainerRef.current, {
       center: { lat: 20.5937, lng: 78.9629 },
@@ -179,7 +228,7 @@ const MapView = () => {
     } else if (selectedPlaceId && selectedPlaceName) {
       handleGooglePlace(selectedPlaceId, map);
     }
-  }, [mapLoaded, destinations, selectedDestinationId, selectedPlaceId, selectedPlaceName]);
+  }, [mapLoaded, destinations, selectedDestinationId, selectedPlaceId, selectedPlaceName, useOpenStreetMap]);
   
   const handleGooglePlace = async (placeId: string, map: google.maps.Map) => {
     try {
@@ -247,38 +296,24 @@ const MapView = () => {
       return;
     }
     
-    if (!directionsServiceRef.current || !mapRef.current) {
-      toast({
-        title: "Map Not Ready",
-        description: "The map services are still loading.",
-      });
-      return;
-    }
-    
     setIsLoading(true);
     
     try {
-      const directionsRequest: google.maps.DirectionsRequest = {
-        origin: startLocation,
-        destination: endLocation,
-        travelMode: window.google.maps.TravelMode.DRIVING,
-      };
-      
-      directionsServiceRef.current.route(directionsRequest, (result, status) => {
-        if (status === window.google.maps.DirectionsStatus.OK && result) {
-          setDirectionsResponse(result);
-          
-          if (directionsRendererRef.current) {
-            directionsRendererRef.current.setDirections(result);
-          }
-          
-          const route = result.routes[0];
+      if (useOpenStreetMap) {
+        // Use free API for directions
+        const directionsData = await googlePlacesService.getDirections(startLocation, endLocation);
+        
+        if (directionsData && directionsData.routes && directionsData.routes.length > 0) {
+          const route = directionsData.routes[0];
           const leg = route.legs[0];
           
           toast({
             title: "Directions Found",
             description: `Distance: ${leg.distance?.text}, Duration: ${leg.duration?.text}`,
           });
+          
+          // For OpenStreetMap, we'd need to implement polyline drawing
+          console.log('Directions:', directionsData);
         } else {
           toast({
             title: "Direction Error",
@@ -286,8 +321,47 @@ const MapView = () => {
             variant: "destructive"
           });
         }
-        setIsLoading(false);
-      });
+      } else {
+        // Use Google Maps directions (existing code)
+        if (!directionsServiceRef.current || !mapRef.current) {
+          toast({
+            title: "Map Not Ready",
+            description: "The map services are still loading.",
+          });
+          return;
+        }
+        
+        const directionsRequest: google.maps.DirectionsRequest = {
+          origin: startLocation,
+          destination: endLocation,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        };
+        
+        directionsServiceRef.current.route(directionsRequest, (result, status) => {
+          if (status === window.google.maps.DirectionsStatus.OK && result) {
+            setDirectionsResponse(result);
+            
+            if (directionsRendererRef.current) {
+              directionsRendererRef.current.setDirections(result);
+            }
+            
+            const route = result.routes[0];
+            const leg = route.legs[0];
+            
+            toast({
+              title: "Directions Found",
+              description: `Distance: ${leg.distance?.text}, Duration: ${leg.duration?.text}`,
+            });
+          } else {
+            toast({
+              title: "Direction Error",
+              description: "Could not find directions between these locations.",
+              variant: "destructive"
+            });
+          }
+          setIsLoading(false);
+        });
+      }
     } catch (error) {
       console.error("Error calculating directions:", error);
       toast({
@@ -295,6 +369,7 @@ const MapView = () => {
         description: "An error occurred while getting directions.",
         variant: "destructive"
       });
+    } finally {
       setIsLoading(false);
     }
   };
@@ -382,7 +457,7 @@ const MapView = () => {
       <div className="h-screen w-full flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p>Loading Google Maps...</p>
+          <p>Loading Map...</p>
         </div>
       </div>
     );
@@ -390,7 +465,22 @@ const MapView = () => {
 
   return (
     <div className="h-screen w-full relative">
-      <div ref={mapContainerRef} className="w-full h-full rounded-lg" />
+      {useOpenStreetMap ? (
+        <OpenStreetMapView
+          center={osmCenter}
+          zoom={selectedDestinationId ? 14 : 5}
+          markers={osmMarkers}
+        />
+      ) : (
+        <div ref={mapContainerRef} className="w-full h-full rounded-lg" />
+      )}
+      
+      {/* Free API Attribution */}
+      {useOpenStreetMap && (
+        <div className="absolute bottom-2 right-2 bg-white/90 px-2 py-1 rounded text-xs">
+          Powered by OpenStreetMap & Free APIs
+        </div>
+      )}
       
       {/* Directions Toggle Button - 25% above bottom left corner */}
       {!showFloatingBox && (

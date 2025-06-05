@@ -1,54 +1,73 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { freeApiService } from './freeApiService';
 
-// Google Places service functions
+// Enhanced Google Places service functions with free API fallbacks
 export const googlePlacesService = {
   searchPlaces: async (query: string) => {
     try {
+      // First try Google API
       const { data, error } = await supabase.functions.invoke('google-places-service', {
         body: { action: 'search_places', query }
       });
       
       if (error) throw error;
-      return data;
+      if (data && data.results && data.results.length > 0) {
+        return data;
+      }
     } catch (error) {
-      console.error('Error searching places:', error);
-      return null;
+      console.log('Google API failed, falling back to free APIs:', error);
     }
+    
+    // Fallback to free APIs
+    console.log('Using free APIs for place search');
+    return await freeApiService.searchPlaces(query);
   },
 
   searchTouristPlaces: async (cityName: string) => {
     try {
+      // First try Google API
       const query = `tourist attractions in ${cityName}`;
       const { data, error } = await supabase.functions.invoke('google-places-service', {
         body: { action: 'search_tourist_places', query, city: cityName }
       });
       
       if (error) throw error;
-      return data;
+      if (data && data.results && data.results.length > 0) {
+        return data;
+      }
     } catch (error) {
-      console.error('Error searching tourist places:', error);
-      return null;
+      console.log('Google API failed, falling back to free APIs:', error);
     }
+    
+    // Fallback to free APIs
+    console.log('Using free APIs for tourist places search');
+    return await freeApiService.searchTouristPlaces(cityName);
   },
 
   getPlaceDetails: async (placeId: string) => {
     try {
+      // First try Google API
       const { data, error } = await supabase.functions.invoke('google-places-service', {
         body: { action: 'place_details', placeId }
       });
       
       if (error) throw error;
-      return data;
+      if (data && !data.error) {
+        return data;
+      }
     } catch (error) {
-      console.error('Error getting place details:', error);
-      return null;
+      console.log('Google API failed, falling back to free APIs:', error);
     }
+    
+    // Fallback to free APIs
+    console.log('Using free APIs for place details');
+    return await freeApiService.getPlaceDetails(placeId);
   },
 
   getNearbyTouristAttractions: async (lat: number, lng: number, radius: number = 5000) => {
     try {
+      // First try Google API
       const { data, error } = await supabase.functions.invoke('google-places-service', {
         body: { 
           action: 'nearby_search', 
@@ -59,53 +78,85 @@ export const googlePlacesService = {
       });
       
       if (error) throw error;
-      return data;
+      if (data && data.results && data.results.length > 0) {
+        return data;
+      }
     } catch (error) {
-      console.error('Error getting nearby attractions:', error);
-      return null;
+      console.log('Google API failed, falling back to free APIs:', error);
     }
+    
+    // Fallback to search nearby with free APIs
+    console.log('Using free APIs for nearby search');
+    return await freeApiService.searchPlaces('tourist attractions');
   },
 
   getDirections: async (origin: string, destination: string) => {
     try {
+      // First try Google API
       const { data, error } = await supabase.functions.invoke('google-places-service', {
         body: { action: 'get_directions', origin, destination }
       });
       
       if (error) throw error;
-      return data;
+      if (data && data.routes && data.routes.length > 0) {
+        return data;
+      }
     } catch (error) {
-      console.error('Error getting directions:', error);
-      return null;
+      console.log('Google API failed, falling back to free APIs:', error);
     }
+    
+    // Fallback to free APIs
+    console.log('Using free APIs for directions');
+    return await freeApiService.getDirections(origin, destination);
   },
 
   getPhotoUrl: async (photoReference: string, maxWidth: number = 400) => {
     try {
+      // First try Google API
       const { data, error } = await supabase.functions.invoke('google-places-service', {
         body: { action: 'get_photo', query: photoReference, maxWidth }
       });
       
       if (error) throw error;
-      return data.photo_url;
+      if (data && data.photo_url) {
+        return data.photo_url;
+      }
     } catch (error) {
-      console.error('Error getting photo URL:', error);
-      return null;
+      console.log('Google API failed, using free API photos:', error);
     }
+    
+    // For free APIs, photos come as direct URLs
+    return await freeApiService.getPhotoUrl(photoReference);
   },
 
   autocomplete: async (input: string) => {
     try {
+      // First try Google API
       const { data, error } = await supabase.functions.invoke('google-places-service', {
         body: { action: 'autocomplete', query: input }
       });
       
       if (error) throw error;
-      return data;
+      if (data && data.predictions) {
+        return data;
+      }
     } catch (error) {
-      console.error('Error getting autocomplete:', error);
-      return null;
+      console.log('Google API failed, falling back to free APIs:', error);
     }
+    
+    // Fallback to free APIs
+    console.log('Using free APIs for autocomplete');
+    const results = await freeApiService.autocomplete(input);
+    return {
+      predictions: results.results?.map((place: any) => ({
+        description: place.formatted_address,
+        place_id: place.place_id,
+        structured_formatting: {
+          main_text: place.name,
+          secondary_text: place.formatted_address
+        }
+      })) || []
+    };
   }
 };
 
