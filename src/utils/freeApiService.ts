@@ -63,14 +63,29 @@ export const freeApiService = {
   searchPlaces: async (query: string) => {
     try {
       console.log('Searching places with Nominatim:', query);
+      
+      if (!query || query.trim().length < 2) {
+        return { results: [], status: 'INVALID_REQUEST' };
+      }
+
       const response = await fetch(
-        `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(query)}&limit=10&addressdetails=1`
+        `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(query)}&limit=10&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'TourGuideApp/1.0'
+          }
+        }
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       return {
         results: data.map((place: any) => ({
-          place_id: place.place_id,
+          place_id: place.place_id || `nominatim_${place.osm_id}`,
           name: place.display_name.split(',')[0],
           formatted_address: place.display_name,
           geometry: {
@@ -81,7 +96,7 @@ export const freeApiService = {
           },
           photos: [getUnsplashImage(place.type ? [place.type] : [], place.display_name)],
           rating: 3.5 + Math.random() * 1.5, // Random rating between 3.5-5.0
-          types: place.type ? [place.type] : [],
+          types: place.type ? [place.type] : ['place'],
           budget: generateBudget(place.type ? [place.type] : [])
         })),
         status: 'OK'
@@ -96,9 +111,24 @@ export const freeApiService = {
   geocodeAddress: async (address: string) => {
     try {
       console.log('Geocoding address with Nominatim:', address);
+      
+      if (!address || address.trim().length < 2) {
+        return { results: [], status: 'INVALID_REQUEST' };
+      }
+
       const response = await fetch(
-        `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`
+        `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'TourGuideApp/1.0'
+          }
+        }
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data && data.length > 0) {
@@ -124,68 +154,94 @@ export const freeApiService = {
     }
   },
 
-  // Search for tourist places using Foursquare API
+  // Search for tourist places using both Foursquare and Nominatim
   searchTouristPlaces: async (cityName: string) => {
     try {
-      console.log('Searching tourist places with Foursquare:', cityName);
+      console.log('Searching tourist places:', cityName);
       
-      // First, get city coordinates
-      const cityGeocode = await freeApiService.geocodeAddress(cityName);
-      if (cityGeocode.status !== 'OK' || cityGeocode.results.length === 0) {
-        console.log('Could not geocode city, falling back to Nominatim search');
-        return freeApiService.searchPlaces(`${cityName} tourist attractions`);
+      if (!cityName || cityName.trim().length < 2) {
+        return { results: [], status: 'INVALID_REQUEST' };
       }
+
+      // First try Nominatim for tourist attractions
+      const nominatimResults = await freeApiService.searchPlaces(`${cityName} tourist attractions monuments museums temples`);
       
-      const { lat, lng } = cityGeocode.results[0].geometry.location;
-      
-      // Search for tourist attractions near the city
-      const categories = '10000,12000,13000,16000'; // Arts, Entertainment, Landmarks, Travel
-      const response = await fetch(
-        `${FOURSQUARE_BASE_URL}/places/search?ll=${lat},${lng}&radius=50000&categories=${categories}&limit=20`,
-        {
-          headers: {
-            'Authorization': FOURSQUARE_API_KEY,
-            'Accept': 'application/json'
+      // Also try Foursquare if available
+      let foursquareResults = { results: [] };
+      try {
+        // First, get city coordinates
+        const cityGeocode = await freeApiService.geocodeAddress(cityName);
+        if (cityGeocode.status === 'OK' && cityGeocode.results.length > 0) {
+          const { lat, lng } = cityGeocode.results[0].geometry.location;
+          
+          // Search for tourist attractions near the city
+          const categories = '10000,12000,13000,16000'; // Arts, Entertainment, Landmarks, Travel
+          const response = await fetch(
+            `${FOURSQUARE_BASE_URL}/places/search?ll=${lat},${lng}&radius=50000&categories=${categories}&limit=15`,
+            {
+              headers: {
+                'Authorization': FOURSQUARE_API_KEY,
+                'Accept': 'application/json'
+              }
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            
+            foursquareResults = {
+              results: data.results?.map((place: any) => ({
+                place_id: place.fsq_id,
+                name: place.name,
+                formatted_address: place.location?.formatted_address || place.location?.address || `${cityName}`,
+                geometry: {
+                  location: {
+                    lat: place.geocodes?.main?.latitude || lat,
+                    lng: place.geocodes?.main?.longitude || lng
+                  }
+                },
+                rating: place.rating || (3.5 + Math.random() * 1.5),
+                photos: [getUnsplashImage(place.categories?.map((cat: any) => cat.name) || [], place.name)],
+                types: place.categories?.map((cat: any) => cat.name) || ['tourist_attraction'],
+                budget: generateBudget(place.categories?.map((cat: any) => cat.name) || [])
+              })) || []
+            };
           }
         }
-      );
-
-      if (!response.ok) {
-        console.log('Foursquare API error, falling back to Nominatim');
-        return freeApiService.searchPlaces(`${cityName} tourist attractions`);
+      } catch (foursquareError) {
+        console.log('Foursquare API unavailable, using Nominatim only:', foursquareError);
       }
 
-      const data = await response.json();
-      
+      // Combine results
+      const combinedResults = [
+        ...(nominatimResults.results || []),
+        ...(foursquareResults.results || [])
+      ];
+
+      // Remove duplicates based on name similarity
+      const uniqueResults = combinedResults.filter((result, index, self) => 
+        index === self.findIndex(r => r.name.toLowerCase() === result.name.toLowerCase())
+      );
+
       return {
-        results: data.results?.map((place: any) => ({
-          place_id: place.fsq_id,
-          name: place.name,
-          formatted_address: place.location?.formatted_address || place.location?.address || `${cityName}`,
-          geometry: {
-            location: {
-              lat: place.geocodes?.main?.latitude || lat,
-              lng: place.geocodes?.main?.longitude || lng
-            }
-          },
-          rating: place.rating || (3.5 + Math.random() * 1.5),
-          photos: [getUnsplashImage(place.categories?.map((cat: any) => cat.name) || [], place.name)],
-          types: place.categories?.map((cat: any) => cat.name) || ['tourist_attraction'],
-          budget: generateBudget(place.categories?.map((cat: any) => cat.name) || [])
-        })) || [],
+        results: uniqueResults.slice(0, 20), // Limit to 20 results
         status: 'OK'
       };
     } catch (error) {
       console.error('Error searching tourist places:', error);
-      // Fallback to Nominatim
-      return freeApiService.searchPlaces(`${cityName} tourist attractions`);
+      // Fallback to basic search
+      return freeApiService.searchPlaces(`${cityName} attractions`);
     }
   },
 
   // Get directions using OpenRouteService
   getDirections: async (origin: string, destination: string) => {
     try {
-      console.log('Getting directions with OpenRouteService from', origin, 'to', destination);
+      console.log('Getting directions from', origin, 'to', destination);
+
+      if (!origin || !destination || origin.trim().length < 2 || destination.trim().length < 2) {
+        return { routes: [], status: 'INVALID_REQUEST' };
+      }
 
       // First geocode the addresses
       const originGeocode = await freeApiService.geocodeAddress(origin);
@@ -256,7 +312,28 @@ export const freeApiService = {
   // Get place details using Foursquare
   getPlaceDetails: async (placeId: string) => {
     try {
-      console.log('Getting place details with Foursquare:', placeId);
+      console.log('Getting place details:', placeId);
+      
+      if (!placeId) {
+        return null;
+      }
+
+      // If it's a Nominatim place ID, we'll create mock details
+      if (placeId.startsWith('nominatim_') || placeId.includes('place_id')) {
+        return {
+          place_id: placeId,
+          name: 'Tourist Attraction',
+          formatted_address: 'Location details',
+          geometry: {
+            location: { lat: 0, lng: 0 }
+          },
+          rating: 4.0 + Math.random(),
+          photos: [getUnsplashImage(['tourist_attraction'], 'attraction')],
+          types: ['tourist_attraction'],
+          budget: 'medium'
+        };
+      }
+
       const response = await fetch(
         `${FOURSQUARE_BASE_URL}/places/${placeId}`,
         {
@@ -310,14 +387,28 @@ export const freeApiService = {
   // Autocomplete functionality using Nominatim
   autocomplete: async (input: string) => {
     try {
+      if (!input || input.trim().length < 2) {
+        return { results: [] };
+      }
+
       const response = await fetch(
-        `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(input)}&limit=5&addressdetails=1`
+        `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(input)}&limit=5&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'TourGuideApp/1.0'
+          }
+        }
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       return {
         results: data.map((place: any) => ({
-          place_id: place.place_id,
+          place_id: place.place_id || `nominatim_${place.osm_id}`,
           name: place.display_name.split(',')[0],
           formatted_address: place.display_name,
           geometry: {

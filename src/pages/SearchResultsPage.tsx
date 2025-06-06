@@ -5,6 +5,7 @@ import { useDestinations } from '@/contexts/DestinationContext';
 import SearchBar from '@/components/destinations/SearchBar';
 import DestinationCard from '@/components/destinations/DestinationCard';
 import { mapsService } from '@/utils/mapsService';
+import { useToast } from '@/components/ui/use-toast';
 
 interface TouristPlace {
   id: string;
@@ -17,6 +18,10 @@ interface TouristPlace {
   budget: string;
   place_id: string;
   isFreeApiPlace: boolean;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 const SearchResultsPage = () => {
@@ -26,10 +31,12 @@ const SearchResultsPage = () => {
   const { searchDestinations, setCurrentSearchQuery, currentSearchQuery } = useDestinations();
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!query) {
+    if (!query || query.trim().length < 2) {
       navigate('/recommendations');
       return;
     }
@@ -40,22 +47,27 @@ const SearchResultsPage = () => {
     
     const fetchResults = async () => {
       setIsLoading(true);
+      setError(null);
       
       try {
         if (searchType === 'city') {
           // Fetch tourist places for the city using free APIs
           const cityName = query.replace(/tourist places|attractions|places in|city|in|visit/gi, '').trim();
           
+          if (cityName.length < 2) {
+            throw new Error('City name too short');
+          }
+          
           const freeApiData = await mapsService.searchTouristPlaces(cityName);
           
           if (freeApiData && freeApiData.results) {
             const touristPlaces = await Promise.all(
               freeApiData.results.map(async (place: any) => {
-                let imageUrl = 'https://via.placeholder.com/300x200';
+                let imageUrl = `https://images.unsplash.com/photo-1472396961693-142e6e269027?w=400&h=300&fit=crop`;
                 
                 if (place.photos && place.photos.length > 0) {
                   try {
-                    const photoUrl = await mapsService.getPhotoUrl(place.photos[0].photo_reference || place.photos[0]);
+                    const photoUrl = await mapsService.getPhotoUrl(place.photos[0]);
                     if (photoUrl) imageUrl = photoUrl;
                   } catch (error) {
                     console.error('Error getting photo:', error);
@@ -78,9 +90,10 @@ const SearchResultsPage = () => {
                   rating: place.rating || 4.0,
                   description: `Explore ${place.name}, a popular tourist attraction in ${cityName}. Discover the rich culture and amazing experiences this place has to offer.`,
                   category,
-                  budget: 'medium',
+                  budget: place.budget || 'medium',
                   place_id: place.place_id,
-                  isFreeApiPlace: true
+                  isFreeApiPlace: true,
+                  coordinates: place.geometry?.location
                 };
               })
             );
@@ -100,11 +113,11 @@ const SearchResultsPage = () => {
             if (freeApiData && freeApiData.results) {
               freeApiResults = await Promise.all(
                 freeApiData.results.slice(0, 10).map(async (place: any) => {
-                  let imageUrl = 'https://via.placeholder.com/300x200';
+                  let imageUrl = `https://images.unsplash.com/photo-1472396961693-142e6e269027?w=400&h=300&fit=crop`;
                   
                   if (place.photos && place.photos.length > 0) {
                     try {
-                      const photoUrl = await mapsService.getPhotoUrl(place.photos[0].photo_reference || place.photos[0]);
+                      const photoUrl = await mapsService.getPhotoUrl(place.photos[0]);
                       if (photoUrl) imageUrl = photoUrl;
                     } catch (error) {
                       console.error('Error getting photo:', error);
@@ -126,13 +139,10 @@ const SearchResultsPage = () => {
                     rating: place.rating || 4.0,
                     description: `Discover ${place.name}. A wonderful place to visit with amazing experiences and rich culture.`,
                     category,
-                    budget: 'medium',
+                    budget: place.budget || 'medium',
                     place_id: place.place_id,
                     isFreeApiPlace: true,
-                    coordinates: {
-                      lat: place.geometry?.location?.lat || 0,
-                      lng: place.geometry?.location?.lng || 0
-                    }
+                    coordinates: place.geometry?.location
                   };
                 })
               );
@@ -143,19 +153,31 @@ const SearchResultsPage = () => {
           } catch (error) {
             console.error('Error fetching from free APIs:', error);
             setResults(localResults);
+            toast({
+              title: "API Warning",
+              description: "Some search features may be limited. Showing local results.",
+              variant: "destructive"
+            });
           }
         }
       } catch (error) {
         console.error('Error fetching search results:', error);
+        setError('Failed to load search results');
         const localResults = searchDestinations(query);
         setResults(localResults);
+        
+        toast({
+          title: "Search Error",
+          description: "Some results may be missing. Please try again.",
+          variant: "destructive"
+        });
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchResults();
-  }, [query, searchType, searchDestinations, setCurrentSearchQuery, currentSearchQuery, navigate]);
+  }, [query, searchType, searchDestinations, setCurrentSearchQuery, currentSearchQuery, navigate, toast]);
 
   if (isLoading) {
     return (
@@ -194,6 +216,12 @@ const SearchResultsPage = () => {
           <SearchBar />
         </div>
         
+        {error && (
+          <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <p className="text-destructive text-sm">{error}</p>
+          </div>
+        )}
+        
         <div className="mb-4">
           <p className="text-muted-foreground">
             {results.length} {results.length === 1 ? 'result' : 'results'} for "{query}"
@@ -220,6 +248,12 @@ const SearchResultsPage = () => {
                 : 'Try searching with different terms or explore our recommended destinations'
               }
             </p>
+            <button 
+              onClick={() => navigate('/recommendations')}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            >
+              Browse Recommendations
+            </button>
           </div>
         )}
       </div>
