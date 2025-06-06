@@ -1,12 +1,10 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, MapPin, Star } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { useDebounce } from 'use-debounce';
-import { getGoogleMapsApiKey } from '@/config/apiConfig';
-import { googlePlacesService } from '@/utils/googleMapsService';
+import { mapsService } from '@/utils/mapsService';
 
 interface SearchResult {
   id: string;
@@ -26,25 +24,10 @@ const SearchBar = () => {
   const [debouncedQuery] = useDebounce(query, 300);
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [apiKey, setApiKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchMode, setSearchMode] = useState<'places' | 'cities'>('places');
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  
-  // Fetch API key on component mount
-  useEffect(() => {
-    const fetchApiKey = async () => {
-      try {
-        const key = await getGoogleMapsApiKey();
-        setApiKey(key);
-      } catch (error) {
-        console.error("Error fetching Google Maps API key:", error);
-      }
-    };
-    
-    fetchApiKey();
-  }, []);
   
   // Detect if query is a city search
   useEffect(() => {
@@ -74,41 +57,38 @@ const SearchBar = () => {
         if (searchMode === 'cities') {
           // Search for tourist places in the city
           const cityName = debouncedQuery.replace(/tourist places|attractions|places in|city|in|visit/gi, '').trim();
-          const touristQuery = `tourist attractions in ${cityName}`;
           
-          if (apiKey) {
-            const googleData = await googlePlacesService.searchPlaces(touristQuery);
-            
-            if (googleData && googleData.results) {
-              const touristPlaces = await Promise.all(
-                googleData.results.slice(0, 8).map(async (place: any) => {
-                  let imageUrl = 'https://via.placeholder.com/300x200';
-                  
-                  if (place.photos && place.photos.length > 0) {
-                    try {
-                      const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
-                      if (photoUrl) imageUrl = photoUrl;
-                    } catch (error) {
-                      console.error('Error getting photo:', error);
-                    }
+          const data = await mapsService.searchTouristPlaces(cityName);
+          
+          if (data && data.results) {
+            const touristPlaces = await Promise.all(
+              data.results.slice(0, 8).map(async (place: any) => {
+                let imageUrl = 'https://via.placeholder.com/300x200';
+                
+                if (place.photos && place.photos.length > 0) {
+                  try {
+                    const photoUrl = await mapsService.getPhotoUrl(place.photos[0].photo_reference);
+                    if (photoUrl) imageUrl = photoUrl;
+                  } catch (error) {
+                    console.error('Error getting photo:', error);
                   }
+                }
 
-                  return {
-                    id: place.place_id,
-                    name: place.name,
-                    location: place.formatted_address || '',
-                    imageUrl,
-                    rating: place.rating || 0,
-                    isGooglePlace: true,
-                    place_id: place.place_id,
-                    geometry: place.geometry,
-                    types: place.types || []
-                  };
-                })
-              );
-              
-              combinedResults = touristPlaces;
-            }
+                return {
+                  id: place.place_id,
+                  name: place.name,
+                  location: place.formatted_address || '',
+                  imageUrl,
+                  rating: place.rating || 0,
+                  isGooglePlace: true,
+                  place_id: place.place_id,
+                  geometry: place.geometry,
+                  types: place.types || []
+                };
+              })
+            );
+            
+            combinedResults = touristPlaces;
           }
         } else {
           // Regular place search
@@ -123,42 +103,40 @@ const SearchBar = () => {
             isGooglePlace: false
           }));
 
-          // Search Google Places if API key is available
-          let googleResults: SearchResult[] = [];
-          if (apiKey) {
-            const googleData = await googlePlacesService.searchPlaces(debouncedQuery);
-            
-            if (googleData && googleData.results) {
-              googleResults = await Promise.all(
-                googleData.results.slice(0, 5).map(async (place: any) => {
-                  let imageUrl = 'https://via.placeholder.com/100';
-                  
-                  if (place.photos && place.photos.length > 0) {
-                    try {
-                      const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
-                      if (photoUrl) imageUrl = photoUrl;
-                    } catch (error) {
-                      console.error('Error getting photo:', error);
-                    }
+          // Search with free APIs
+          let apiResults: SearchResult[] = [];
+          const data = await mapsService.searchPlaces(debouncedQuery);
+          
+          if (data && data.results) {
+            apiResults = await Promise.all(
+              data.results.slice(0, 5).map(async (place: any) => {
+                let imageUrl = 'https://via.placeholder.com/100';
+                
+                if (place.photos && place.photos.length > 0) {
+                  try {
+                    const photoUrl = await mapsService.getPhotoUrl(place.photos[0].photo_reference);
+                    if (photoUrl) imageUrl = photoUrl;
+                  } catch (error) {
+                    console.error('Error getting photo:', error);
                   }
+                }
 
-                  return {
-                    id: place.place_id,
-                    name: place.name,
-                    location: place.formatted_address || '',
-                    imageUrl,
-                    rating: place.rating || 0,
-                    isGooglePlace: true,
-                    place_id: place.place_id,
-                    geometry: place.geometry,
-                    types: place.types || []
-                  };
-                })
-              );
-            }
+                return {
+                  id: place.place_id,
+                  name: place.name,
+                  location: place.formatted_address || '',
+                  imageUrl,
+                  rating: place.rating || 0,
+                  isGooglePlace: true,
+                  place_id: place.place_id,
+                  geometry: place.geometry,
+                  types: place.types || []
+                };
+              })
+            );
           }
 
-          combinedResults = [...formattedLocalResults, ...googleResults];
+          combinedResults = [...formattedLocalResults, ...apiResults];
         }
 
         setSearchResults(combinedResults);
@@ -179,7 +157,7 @@ const SearchBar = () => {
     };
 
     performSearch();
-  }, [debouncedQuery, apiKey, searchDestinations, searchMode]);
+  }, [debouncedQuery, searchDestinations, searchMode]);
   
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -285,7 +263,7 @@ const SearchBar = () => {
           
           {!isLoading && searchResults.length > 0 && searchResults.map(result => (
             <div
-              key={`${result.isGooglePlace ? 'google' : 'local'}-${result.id}`}
+              key={`${result.isGooglePlace ? 'api' : 'local'}-${result.id}`}
               className="flex items-center p-3 border-b last:border-b-0 cursor-pointer hover:bg-muted/50"
               onClick={() => handleResultClick(result)}
             >
@@ -304,7 +282,7 @@ const SearchBar = () => {
                   {result.name}
                   {result.isGooglePlace && (
                     <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-1 py-0.5 rounded">
-                      Google
+                      API
                     </span>
                   )}
                   {searchMode === 'cities' && (
