@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Destination } from '@/types';
 import { useDestinations } from '@/contexts/DestinationContext';
@@ -36,14 +35,11 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
           if (placeDetails) {
             setEnhancedData(placeDetails);
             
+            // Handle photos from free API (direct URLs)
             if (placeDetails.photos && placeDetails.photos.length > 0) {
-              try {
-                const photoUrl = await mapsService.getPhotoUrl(placeDetails.photos[0].photo_reference);
-                if (photoUrl) {
-                  setImageUrl(photoUrl);
-                }
-              } catch (error) {
-                console.error('Error fetching photo:', error);
+              const photoUrl = Array.isArray(placeDetails.photos) ? placeDetails.photos[0] : placeDetails.photos;
+              if (typeof photoUrl === 'string') {
+                setImageUrl(photoUrl);
               }
             }
           }
@@ -57,6 +53,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
     
     fetchEnhancedData();
   }, [destination.name, isFreeApiPlace]);
+  
   
   const getBudgetLabel = (budget: string) => {
     switch (budget) {
