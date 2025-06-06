@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import OpenStreetMapView from './OpenStreetMapView';
 import FloatingDirectionsBox from './FloatingDirectionsBox';
-import { freeApiService } from '@/utils/freeApiService';
+import { mapsService } from '@/utils/mapsService';
 import { useToast } from '@/components/ui/use-toast';
 
 interface Marker {
@@ -35,10 +35,10 @@ const MapView = () => {
           description: placeDetails.formatted_address || ''
         }]);
       } else if (placeName) {
-        // Geocode the place name
+        // Geocode the place name using free APIs
         setIsLoading(true);
         try {
-          const geocodeResult = await freeApiService.geocodeAddress(placeName);
+          const geocodeResult = await mapsService.geocodeAddress(placeName);
           if (geocodeResult.status === 'OK' && geocodeResult.results.length > 0) {
             const { lat, lng } = geocodeResult.results[0].geometry.location;
             setMapCenter([lat, lng]);
@@ -64,69 +64,11 @@ const MapView = () => {
     loadPlaceOnMap();
   }, [placeId, placeName, placeDetails, toast]);
 
-  const handleDirectionsRequest = async (origin: string, destination: string) => {
-    setIsLoading(true);
-    try {
-      const directionsResult = await freeApiService.getDirections(origin, destination);
-      
-      if (directionsResult.status === 'OK' && directionsResult.routes.length > 0) {
-        // Geocode origin and destination to get coordinates for markers
-        const [originGeocode, destGeocode] = await Promise.all([
-          freeApiService.geocodeAddress(origin),
-          freeApiService.geocodeAddress(destination)
-        ]);
-
-        const newMarkers: Marker[] = [];
-        
-        if (originGeocode.status === 'OK' && originGeocode.results.length > 0) {
-          const { lat, lng } = originGeocode.results[0].geometry.location;
-          newMarkers.push({
-            position: [lat, lng],
-            title: 'Start',
-            description: origin
-          });
-          setMapCenter([lat, lng]);
-        }
-
-        if (destGeocode.status === 'OK' && destGeocode.results.length > 0) {
-          const { lat, lng } = destGeocode.results[0].geometry.location;
-          newMarkers.push({
-            position: [lat, lng],
-            title: 'Destination',
-            description: destination
-          });
-        }
-
-        setMarkers(newMarkers);
-
-        toast({
-          title: "Directions Found",
-          description: `Route: ${directionsResult.routes[0].legs[0].distance.text}, ${directionsResult.routes[0].legs[0].duration.text}`,
-        });
-      } else {
-        toast({
-          title: "No Route Found",
-          description: "Could not find a route between the specified locations.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Error getting directions:', error);
-      toast({
-        title: "Directions Error",
-        description: "Failed to get directions. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleMapClick = async (lat: number, lng: number) => {
     setIsLoading(true);
     try {
-      // Try to get place details for the clicked location
-      const searchResults = await freeApiService.searchPlaces(`${lat},${lng}`);
+      // Try to get place details for the clicked location using free APIs
+      const searchResults = await mapsService.searchPlaces(`${lat},${lng}`);
       
       let title = 'Selected Location';
       let description = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
@@ -165,10 +107,7 @@ const MapView = () => {
         onMapClick={handleMapClick}
       />
       
-      <FloatingDirectionsBox
-        onGetDirections={handleDirectionsRequest}
-        isLoading={isLoading}
-      />
+      <FloatingDirectionsBox isLoading={isLoading} />
       
       {isLoading && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-background/90 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg border">

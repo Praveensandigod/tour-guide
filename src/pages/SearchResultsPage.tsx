@@ -4,8 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import SearchBar from '@/components/destinations/SearchBar';
 import DestinationCard from '@/components/destinations/DestinationCard';
-import { googlePlacesService } from '@/utils/googleMapsService';
-import { getGoogleMapsApiKey } from '@/config/apiConfig';
+import { mapsService } from '@/utils/mapsService';
 
 interface TouristPlace {
   id: string;
@@ -17,7 +16,7 @@ interface TouristPlace {
   category: string;
   budget: string;
   place_id: string;
-  isGooglePlace: boolean;
+  isFreeApiPlace: boolean;
 }
 
 const SearchResultsPage = () => {
@@ -27,21 +26,7 @@ const SearchResultsPage = () => {
   const { searchDestinations, setCurrentSearchQuery, currentSearchQuery } = useDestinations();
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [apiKey, setApiKey] = useState<string | null>(null);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const fetchApiKey = async () => {
-      try {
-        const key = await getGoogleMapsApiKey();
-        setApiKey(key);
-      } catch (error) {
-        console.error("Error fetching Google Maps API key:", error);
-      }
-    };
-    
-    fetchApiKey();
-  }, []);
 
   useEffect(() => {
     if (!query) {
@@ -58,28 +43,74 @@ const SearchResultsPage = () => {
       
       try {
         if (searchType === 'city') {
-          // Fetch tourist places for the city
+          // Fetch tourist places for the city using free APIs
           const cityName = query.replace(/tourist places|attractions|places in|city|in|visit/gi, '').trim();
-          const touristQuery = `tourist attractions in ${cityName}`;
           
-          if (apiKey) {
-            const googleData = await googlePlacesService.searchPlaces(touristQuery);
+          const freeApiData = await mapsService.searchTouristPlaces(cityName);
+          
+          if (freeApiData && freeApiData.results) {
+            const touristPlaces = await Promise.all(
+              freeApiData.results.map(async (place: any) => {
+                let imageUrl = 'https://via.placeholder.com/300x200';
+                
+                if (place.photos && place.photos.length > 0) {
+                  try {
+                    const photoUrl = await mapsService.getPhotoUrl(place.photos[0].photo_reference || place.photos[0]);
+                    if (photoUrl) imageUrl = photoUrl;
+                  } catch (error) {
+                    console.error('Error getting photo:', error);
+                  }
+                }
+
+                // Get category from place types
+                const types = place.types || [];
+                let category = 'attraction';
+                if (types.includes('museum')) category = 'historical';
+                else if (types.includes('park')) category = 'nature';
+                else if (types.includes('church') || types.includes('hindu_temple')) category = 'temple';
+                else if (types.includes('tourist_attraction')) category = 'monument';
+
+                return {
+                  id: `free-${place.place_id}`,
+                  name: place.name,
+                  location: place.formatted_address || '',
+                  imageUrl,
+                  rating: place.rating || 4.0,
+                  description: `Explore ${place.name}, a popular tourist attraction in ${cityName}. Discover the rich culture and amazing experiences this place has to offer.`,
+                  category,
+                  budget: 'medium',
+                  place_id: place.place_id,
+                  isFreeApiPlace: true
+                };
+              })
+            );
             
-            if (googleData && googleData.results) {
-              const touristPlaces = await Promise.all(
-                googleData.results.map(async (place: any) => {
+            setResults(touristPlaces);
+          } else {
+            setResults([]);
+          }
+        } else {
+          // Regular search - combine local and free API results
+          const localResults = searchDestinations(query);
+          
+          try {
+            const freeApiData = await mapsService.searchPlaces(query);
+            let freeApiResults: any[] = [];
+            
+            if (freeApiData && freeApiData.results) {
+              freeApiResults = await Promise.all(
+                freeApiData.results.slice(0, 10).map(async (place: any) => {
                   let imageUrl = 'https://via.placeholder.com/300x200';
                   
                   if (place.photos && place.photos.length > 0) {
                     try {
-                      const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
+                      const photoUrl = await mapsService.getPhotoUrl(place.photos[0].photo_reference || place.photos[0]);
                       if (photoUrl) imageUrl = photoUrl;
                     } catch (error) {
                       console.error('Error getting photo:', error);
                     }
                   }
 
-                  // Get category from place types
                   const types = place.types || [];
                   let category = 'attraction';
                   if (types.includes('museum')) category = 'historical';
@@ -88,31 +119,31 @@ const SearchResultsPage = () => {
                   else if (types.includes('tourist_attraction')) category = 'monument';
 
                   return {
-                    id: `google-${place.place_id}`,
+                    id: `free-${place.place_id}`,
                     name: place.name,
                     location: place.formatted_address || '',
                     imageUrl,
                     rating: place.rating || 4.0,
-                    description: `Explore ${place.name}, a popular tourist attraction in ${cityName}. Discover the rich culture and amazing experiences this place has to offer.`,
+                    description: `Discover ${place.name}. A wonderful place to visit with amazing experiences and rich culture.`,
                     category,
                     budget: 'medium',
                     place_id: place.place_id,
-                    isGooglePlace: true
+                    isFreeApiPlace: true,
+                    coordinates: {
+                      lat: place.geometry?.location?.lat || 0,
+                      lng: place.geometry?.location?.lng || 0
+                    }
                   };
                 })
               );
-              
-              setResults(touristPlaces);
-            } else {
-              setResults([]);
             }
-          } else {
-            setResults([]);
+            
+            // Combine local and free API results
+            setResults([...localResults, ...freeApiResults]);
+          } catch (error) {
+            console.error('Error fetching from free APIs:', error);
+            setResults(localResults);
           }
-        } else {
-          // Regular search
-          const localResults = searchDestinations(query);
-          setResults(localResults);
         }
       } catch (error) {
         console.error('Error fetching search results:', error);
@@ -124,7 +155,7 @@ const SearchResultsPage = () => {
     };
 
     fetchResults();
-  }, [query, searchType, searchDestinations, setCurrentSearchQuery, currentSearchQuery, navigate, apiKey]);
+  }, [query, searchType, searchDestinations, setCurrentSearchQuery, currentSearchQuery, navigate]);
 
   if (isLoading) {
     return (

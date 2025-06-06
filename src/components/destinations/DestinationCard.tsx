@@ -5,7 +5,7 @@ import { useDestinations } from '@/contexts/DestinationContext';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Bookmark, Map, LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon, Star } from 'lucide-react';
-import { googlePlacesService } from '@/utils/googleMapsService';
+import { mapsService } from '@/utils/mapsService';
 
 interface DestinationCardProps {
   destination: Destination;
@@ -17,28 +17,28 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   const [imageUrl, setImageUrl] = useState(destination.imageUrl);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Check if this is a Google Places result
-  const isGooglePlace = destination.id.startsWith('google-') || destination.isGooglePlace;
+  // Check if this is a free API place result
+  const isFreeApiPlace = destination.id.startsWith('free-') || destination.isGooglePlace;
   
-  // Fetch enhanced data from Google Places API for local destinations
+  // Fetch enhanced data from free APIs for local destinations
   useEffect(() => {
     const fetchEnhancedData = async () => {
-      if (!destination.name || isGooglePlace) return;
+      if (!destination.name || isFreeApiPlace) return;
       
       setIsLoading(true);
       try {
-        const searchResults = await googlePlacesService.searchPlaces(destination.name);
+        const searchResults = await mapsService.searchPlaces(destination.name);
         
         if (searchResults && searchResults.results && searchResults.results.length > 0) {
           const place = searchResults.results[0];
-          const placeDetails = await googlePlacesService.getPlaceDetails(place.place_id);
+          const placeDetails = await mapsService.getPlaceDetails(place.place_id);
           
           if (placeDetails) {
             setEnhancedData(placeDetails);
             
             if (placeDetails.photos && placeDetails.photos.length > 0) {
               try {
-                const photoUrl = await googlePlacesService.getPhotoUrl(placeDetails.photos[0].photo_reference);
+                const photoUrl = await mapsService.getPhotoUrl(placeDetails.photos[0].photo_reference);
                 if (photoUrl) {
                   setImageUrl(photoUrl);
                 }
@@ -56,7 +56,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
     };
     
     fetchEnhancedData();
-  }, [destination.name, isGooglePlace]);
+  }, [destination.name, isFreeApiPlace]);
   
   const getBudgetLabel = (budget: string) => {
     switch (budget) {
@@ -103,17 +103,17 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   const displayName = enhancedData?.name || destination.name;
   const displayAddress = enhancedData?.formatted_address || destination.location;
   
-  // For Google Places, use the place_id for navigation
-  const placeId = destination.place_id || destination.id.replace('google-', '');
+  // For free API places, use the place_id for navigation
+  const placeId = destination.place_id || destination.id.replace('free-', '');
   
   return (
-    <div className="destination-card group cursor-pointer">
+    <div className="destination-card group cursor-pointer bg-card rounded-lg shadow-md overflow-hidden">
       <Link 
-        to={`/places/${isGooglePlace ? `google-${placeId}` : destination.id}`}
-        state={isGooglePlace ? {
+        to={`/places/${isFreeApiPlace ? `free-${placeId}` : destination.id}`}
+        state={isFreeApiPlace ? {
           placeId: placeId,
           placeName: displayName,
-          isGooglePlace: true,
+          isFreeApiPlace: true,
           placeDetails: destination
         } : undefined}
         className="block"
@@ -122,7 +122,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
           <img
             src={imageUrl}
             alt={displayName}
-            className="w-full h-48 object-cover rounded-t-lg"
+            className="w-full h-48 object-cover"
             onError={(e) => {
               if (imageUrl !== destination.imageUrl) {
                 setImageUrl(destination.imageUrl);
@@ -132,7 +132,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             }}
           />
           {isLoading && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-t-lg">
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
               <div className="text-white text-sm">Loading enhanced data...</div>
             </div>
           )}
@@ -156,9 +156,9 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             {getCategoryLabel(destination.category)}
           </div>
           
-          {(enhancedData || isGooglePlace) && (
+          {(enhancedData || isFreeApiPlace) && (
             <div className="absolute top-2 left-2 bg-green-600/80 text-white px-2 py-0.5 rounded-full text-xs">
-              Google Enhanced
+              Free API Enhanced
             </div>
           )}
         </div>
@@ -167,7 +167,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
           <div className="flex justify-between items-start mb-2">
             <h3 className="font-bold text-lg truncate">{displayName}</h3>
             {budgetInfo.label && (
-              <span className={budgetInfo.class}>{budgetInfo.label}</span>
+              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${budgetInfo.class}`}>{budgetInfo.label}</span>
             )}
           </div>
           
@@ -195,8 +195,8 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
                 ))}
               </div>
               <span className="ml-1 text-xs font-medium">{displayRating.toFixed(1)}</span>
-              {(enhancedData || isGooglePlace) && (
-                <span className="ml-2 text-xs text-green-600">(Google)</span>
+              {(enhancedData || isFreeApiPlace) && (
+                <span className="ml-2 text-xs text-green-600">(Free API)</span>
               )}
             </div>
             
