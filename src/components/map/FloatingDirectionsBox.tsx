@@ -2,10 +2,22 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Navigation, MapPin } from 'lucide-react';
+import { Navigation, MapPin, Clock, Route } from 'lucide-react';
+import { mapsService } from '@/utils/mapsService';
+import { useToast } from '@/components/ui/use-toast';
 
 interface FloatingDirectionsBoxProps {
   isLoading?: boolean;
+}
+
+interface DirectionResult {
+  distance: string;
+  duration: string;
+  steps: Array<{
+    instructions: string;
+    distance: string;
+    duration: string;
+  }>;
 }
 
 const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({ 
@@ -14,17 +26,62 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isGettingDirections, setIsGettingDirections] = useState(false);
+  const [directionResult, setDirectionResult] = useState<DirectionResult | null>(null);
+  const { toast } = useToast();
 
-  const handleGetDirections = () => {
-    if (origin.trim() && destination.trim()) {
-      // This will be handled by the parent component
-      console.log('Getting directions from', origin, 'to', destination);
+  const handleGetDirections = async () => {
+    if (!origin.trim() || !destination.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter both origin and destination.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGettingDirections(true);
+    setDirectionResult(null);
+    
+    try {
+      const directions = await mapsService.getDirections(origin, destination);
+      
+      if (directions && directions.routes && directions.routes.length > 0) {
+        const route = directions.routes[0];
+        const leg = route.legs[0];
+        
+        setDirectionResult({
+          distance: leg.distance.text,
+          duration: leg.duration.text,
+          steps: leg.steps.slice(0, 5) // Show first 5 steps
+        });
+        
+        toast({
+          title: "Directions Found",
+          description: `Route: ${leg.distance.text}, ${leg.duration.text}`,
+        });
+      } else {
+        toast({
+          title: "No Route Found",
+          description: "Could not find a route between these locations.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error getting directions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to get directions. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGettingDirections(false);
     }
   };
 
   return (
     <div className="absolute top-4 right-4 z-10">
-      <div className="bg-background/95 backdrop-blur-sm rounded-lg shadow-lg border p-4 w-80">
+      <div className="bg-background/95 backdrop-blur-sm rounded-lg shadow-lg border p-4 w-80 max-h-96 overflow-y-auto">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-sm flex items-center gap-2">
             <Navigation size={16} />
@@ -63,13 +120,42 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
             
             <Button 
               onClick={handleGetDirections}
-              disabled={!origin.trim() || !destination.trim() || isLoading}
+              disabled={!origin.trim() || !destination.trim() || isLoading || isGettingDirections}
               className="w-full"
             >
-              {isLoading ? 'Getting Directions...' : 'Get Directions'}
+              {isGettingDirections ? 'Getting Directions...' : 'Get Directions'}
             </Button>
             
-            {isLoading && (
+            {directionResult && (
+              <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Route size={16} className="text-primary" />
+                  <span className="font-medium">Route Found</span>
+                </div>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+                  <span className="flex items-center gap-1">
+                    <Navigation size={14} />
+                    {directionResult.distance}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock size={14} />
+                    {directionResult.duration}
+                  </span>
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">Directions:</h4>
+                  {directionResult.steps.map((step, index) => (
+                    <div key={index} className="text-xs text-muted-foreground p-2 bg-background rounded">
+                      <div className="font-medium">{index + 1}. {step.instructions}</div>
+                      <div className="text-xs mt-1">{step.distance} • {step.duration}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {(isLoading || isGettingDirections) && (
               <div className="text-center text-sm text-muted-foreground">
                 Finding the best route...
               </div>

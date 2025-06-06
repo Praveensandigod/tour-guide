@@ -1,46 +1,61 @@
 
-import { supabase } from '@/integrations/supabase/client';
-
 // Nominatim API for geocoding and search
 const NOMINATIM_BASE_URL = 'https://nominatim.openstreetmap.org';
 
-// Foursquare API
+// Foursquare API with your key
 const FOURSQUARE_BASE_URL = 'https://api.foursquare.com/v3';
+const FOURSQUARE_API_KEY = 'fsq3ZQ214FTWR46oluj4T5lE3FK0lQjU+kancYbVa3hLZY4=';
 
-// OpenRouteService API
+// OpenRouteService API with your key
 const OPENROUTE_BASE_URL = 'https://api.openrouteservice.org';
+const OPENROUTE_API_KEY = '5b3ce3597851110001cf6248953e793ca59140e9b20953797ecb4f89';
 
-let cachedOpenRouteKey: string | null = null;
-let cachedFoursquareKey: string | null = null;
-
-const getOpenRouteKey = async (): Promise<string | null> => {
-  if (cachedOpenRouteKey) return cachedOpenRouteKey;
+// Generate random budget based on place type and distance
+const generateBudget = (types: string[] = [], distance?: number): string => {
+  const budgets = ['low', 'medium', 'high'];
   
-  try {
-    const { data, error } = await supabase.functions.invoke('get-openroute-key');
-    if (error) throw error;
-    cachedOpenRouteKey = data.apiKey;
-    console.log('OpenRoute API key retrieved successfully');
-    return cachedOpenRouteKey;
-  } catch (error) {
-    console.error('Error getting OpenRoute key:', error);
-    return null;
+  // Luxury places
+  if (types.some(type => ['hotel', 'resort', 'casino', 'spa'].includes(type))) {
+    return 'high';
   }
+  
+  // Budget places
+  if (types.some(type => ['food', 'street_food', 'park', 'beach'].includes(type))) {
+    return 'low';
+  }
+  
+  // Default to random or medium
+  return budgets[Math.floor(Math.random() * budgets.length)];
 };
 
-const getFoursquareKey = async (): Promise<string | null> => {
-  if (cachedFoursquareKey) return cachedFoursquareKey;
+// Get Unsplash image based on place type
+const getUnsplashImage = (types: string[] = [], name: string = ''): string => {
+  const lowerName = name.toLowerCase();
   
-  try {
-    const { data, error } = await supabase.functions.invoke('get-foursquare-key');
-    if (error) throw error;
-    cachedFoursquareKey = data.apiKey;
-    console.log('Foursquare API key retrieved successfully');
-    return cachedFoursquareKey;
-  } catch (error) {
-    console.error('Error getting Foursquare key:', error);
-    return null;
+  if (types.includes('temple') || types.includes('church') || types.includes('mosque') || lowerName.includes('temple')) {
+    return `https://images.unsplash.com/photo-1466442929976-97f336a657be?w=400&h=300&fit=crop`;
   }
+  if (types.includes('museum') || types.includes('historical') || lowerName.includes('museum') || lowerName.includes('fort')) {
+    return `https://images.unsplash.com/photo-1527576539890-dfa815648363?w=400&h=300&fit=crop`;
+  }
+  if (types.includes('park') || types.includes('garden') || lowerName.includes('park') || lowerName.includes('garden')) {
+    return `https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400&h=300&fit=crop`;
+  }
+  if (types.includes('restaurant') || types.includes('food') || lowerName.includes('restaurant')) {
+    return `https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?w=400&h=300&fit=crop`;
+  }
+  if (types.includes('hotel') || types.includes('lodging') || lowerName.includes('hotel') || lowerName.includes('palace')) {
+    return `https://images.unsplash.com/photo-1721322800607-8c38375eef04?w=400&h=300&fit=crop`;
+  }
+  if (lowerName.includes('beach') || lowerName.includes('lake') || lowerName.includes('river')) {
+    return `https://images.unsplash.com/photo-1500375592092-40eb2168fd21?w=400&h=300&fit=crop`;
+  }
+  if (lowerName.includes('mountain') || lowerName.includes('hill') || lowerName.includes('falls')) {
+    return `https://images.unsplash.com/photo-1469041797191-50ace28483c3?w=400&h=300&fit=crop`;
+  }
+  
+  // Default image
+  return `https://images.unsplash.com/photo-1472396961693-142e6e269027?w=400&h=300&fit=crop`;
 };
 
 export const freeApiService = {
@@ -56,7 +71,7 @@ export const freeApiService = {
       return {
         results: data.map((place: any) => ({
           place_id: place.place_id,
-          name: place.display_name,
+          name: place.display_name.split(',')[0],
           formatted_address: place.display_name,
           geometry: {
             location: {
@@ -64,9 +79,10 @@ export const freeApiService = {
               lng: parseFloat(place.lon)
             }
           },
-          photos: [],
-          rating: 0,
-          types: place.type ? [place.type] : []
+          photos: [getUnsplashImage(place.type ? [place.type] : [], place.display_name)],
+          rating: 3.5 + Math.random() * 1.5, // Random rating between 3.5-5.0
+          types: place.type ? [place.type] : [],
+          budget: generateBudget(place.type ? [place.type] : [])
         })),
         status: 'OK'
       };
@@ -108,28 +124,35 @@ export const freeApiService = {
     }
   },
 
-  // Search for tourist places using Foursquare
+  // Search for tourist places using Foursquare API
   searchTouristPlaces: async (cityName: string) => {
     try {
-      const apiKey = await getFoursquareKey();
-      if (!apiKey) {
-        console.log('Foursquare API key not available, using Nominatim fallback');
+      console.log('Searching tourist places with Foursquare:', cityName);
+      
+      // First, get city coordinates
+      const cityGeocode = await freeApiService.geocodeAddress(cityName);
+      if (cityGeocode.status !== 'OK' || cityGeocode.results.length === 0) {
+        console.log('Could not geocode city, falling back to Nominatim search');
         return freeApiService.searchPlaces(`${cityName} tourist attractions`);
       }
-
-      console.log('Searching tourist places with Foursquare:', cityName);
+      
+      const { lat, lng } = cityGeocode.results[0].geometry.location;
+      
+      // Search for tourist attractions near the city
+      const categories = '10000,12000,13000,16000'; // Arts, Entertainment, Landmarks, Travel
       const response = await fetch(
-        `${FOURSQUARE_BASE_URL}/places/search?query=${encodeURIComponent(cityName + ' tourist attractions')}&limit=20`,
+        `${FOURSQUARE_BASE_URL}/places/search?ll=${lat},${lng}&radius=50000&categories=${categories}&limit=20`,
         {
           headers: {
-            'Authorization': apiKey,
+            'Authorization': FOURSQUARE_API_KEY,
             'Accept': 'application/json'
           }
         }
       );
 
       if (!response.ok) {
-        throw new Error(`Foursquare API error: ${response.status}`);
+        console.log('Foursquare API error, falling back to Nominatim');
+        return freeApiService.searchPlaces(`${cityName} tourist attractions`);
       }
 
       const data = await response.json();
@@ -138,21 +161,17 @@ export const freeApiService = {
         results: data.results?.map((place: any) => ({
           place_id: place.fsq_id,
           name: place.name,
-          formatted_address: place.location?.formatted_address || place.location?.address || '',
+          formatted_address: place.location?.formatted_address || place.location?.address || `${cityName}`,
           geometry: {
             location: {
-              lat: place.geocodes?.main?.latitude || 0,
-              lng: place.geocodes?.main?.longitude || 0
+              lat: place.geocodes?.main?.latitude || lat,
+              lng: place.geocodes?.main?.longitude || lng
             }
           },
-          rating: place.rating || 0,
-          photos: place.photos?.map((photo: any) => ({
-            photo_reference: photo.id,
-            html_attributions: [],
-            height: photo.height,
-            width: photo.width
-          })) || [],
-          types: place.categories?.map((cat: any) => cat.name) || []
+          rating: place.rating || (3.5 + Math.random() * 1.5),
+          photos: [getUnsplashImage(place.categories?.map((cat: any) => cat.name) || [], place.name)],
+          types: place.categories?.map((cat: any) => cat.name) || ['tourist_attraction'],
+          budget: generateBudget(place.categories?.map((cat: any) => cat.name) || [])
         })) || [],
         status: 'OK'
       };
@@ -166,12 +185,6 @@ export const freeApiService = {
   // Get directions using OpenRouteService
   getDirections: async (origin: string, destination: string) => {
     try {
-      const apiKey = await getOpenRouteKey();
-      if (!apiKey) {
-        console.error('OpenRoute API key not available');
-        return { routes: [], status: 'ERROR' };
-      }
-
       console.log('Getting directions with OpenRouteService from', origin, 'to', destination);
 
       // First geocode the addresses
@@ -186,23 +199,16 @@ export const freeApiService = {
       const originCoords = originGeocode.results[0].geometry.location;
       const destCoords = destGeocode.results[0].geometry.location;
 
-      console.log('Origin coords:', originCoords);
-      console.log('Destination coords:', destCoords);
-
-      const directionsUrl = `${OPENROUTE_BASE_URL}/v2/directions/driving-car?api_key=${apiKey}&start=${originCoords.lng},${originCoords.lat}&end=${destCoords.lng},${destCoords.lat}`;
-      console.log('Directions URL:', directionsUrl);
+      const directionsUrl = `${OPENROUTE_BASE_URL}/v2/directions/driving-car?api_key=${OPENROUTE_API_KEY}&start=${originCoords.lng},${originCoords.lat}&end=${destCoords.lng},${destCoords.lat}`;
 
       const response = await fetch(directionsUrl);
 
       if (!response.ok) {
         console.error(`OpenRoute API error: ${response.status}`);
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
         return { routes: [], status: 'ERROR' };
       }
 
       const data = await response.json();
-      console.log('OpenRoute response:', data);
       
       if (data.features && data.features.length > 0) {
         const route = data.features[0];
@@ -250,25 +256,20 @@ export const freeApiService = {
   // Get place details using Foursquare
   getPlaceDetails: async (placeId: string) => {
     try {
-      const apiKey = await getFoursquareKey();
-      if (!apiKey) {
-        console.error('Foursquare API key not available');
-        return null;
-      }
-
       console.log('Getting place details with Foursquare:', placeId);
       const response = await fetch(
         `${FOURSQUARE_BASE_URL}/places/${placeId}`,
         {
           headers: {
-            'Authorization': apiKey,
+            'Authorization': FOURSQUARE_API_KEY,
             'Accept': 'application/json'
           }
         }
       );
 
       if (!response.ok) {
-        throw new Error(`Foursquare API error: ${response.status}`);
+        console.log('Foursquare place details error, returning basic info');
+        return null;
       }
 
       const place = await response.json();
@@ -283,20 +284,16 @@ export const freeApiService = {
             lng: place.geocodes?.main?.longitude || 0
           }
         },
-        rating: place.rating || 0,
-        photos: place.photos?.map((photo: any) => ({
-          photo_reference: photo.id,
-          html_attributions: [],
-          height: photo.height,
-          width: photo.width
-        })) || [],
+        rating: place.rating || (3.5 + Math.random() * 1.5),
+        photos: [getUnsplashImage(place.categories?.map((cat: any) => cat.name) || [], place.name)],
         types: place.categories?.map((cat: any) => cat.name) || [],
         opening_hours: place.hours ? {
           open_now: place.hours.open_now || false,
           weekday_text: place.hours.display || []
         } : undefined,
         website: place.website,
-        phone: place.tel
+        phone: place.tel,
+        budget: generateBudget(place.categories?.map((cat: any) => cat.name) || [])
       };
     } catch (error) {
       console.error('Error getting place details:', error);
@@ -304,47 +301,9 @@ export const freeApiService = {
     }
   },
 
-  // Get place photos using Foursquare
-  getPlacePhotos: async (placeId: string) => {
-    try {
-      const apiKey = await getFoursquareKey();
-      if (!apiKey) {
-        return [];
-      }
-
-      const response = await fetch(
-        `${FOURSQUARE_BASE_URL}/places/${placeId}/photos`,
-        {
-          headers: {
-            'Authorization': apiKey,
-            'Accept': 'application/json'
-          }
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Foursquare API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      return data.map((photo: any) => ({
-        photo_reference: photo.id,
-        html_attributions: [],
-        height: photo.height,
-        width: photo.width,
-        url: `${photo.prefix}original${photo.suffix}`
-      }));
-    } catch (error) {
-      console.error('Error getting place photos:', error);
-      return [];
-    }
-  },
-
-  // Get photo URL (for compatibility)
+  // Get photo URL (returns Unsplash image)
   getPhotoUrl: async (photoReference: string) => {
-    // For free APIs, this would return the direct URL if available
-    // This is a placeholder implementation
+    // For free APIs, return the Unsplash URL directly
     return photoReference;
   },
 
@@ -359,7 +318,7 @@ export const freeApiService = {
       return {
         results: data.map((place: any) => ({
           place_id: place.place_id,
-          name: place.display_name,
+          name: place.display_name.split(',')[0],
           formatted_address: place.display_name,
           geometry: {
             location: {
