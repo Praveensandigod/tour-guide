@@ -20,6 +20,7 @@ const getOpenRouteKey = async (): Promise<string | null> => {
     const { data, error } = await supabase.functions.invoke('get-openroute-key');
     if (error) throw error;
     cachedOpenRouteKey = data.apiKey;
+    console.log('OpenRoute API key retrieved successfully');
     return cachedOpenRouteKey;
   } catch (error) {
     console.error('Error getting OpenRoute key:', error);
@@ -34,6 +35,7 @@ const getFoursquareKey = async (): Promise<string | null> => {
     const { data, error } = await supabase.functions.invoke('get-foursquare-key');
     if (error) throw error;
     cachedFoursquareKey = data.apiKey;
+    console.log('Foursquare API key retrieved successfully');
     return cachedFoursquareKey;
   } catch (error) {
     console.error('Error getting Foursquare key:', error);
@@ -45,6 +47,7 @@ export const freeApiService = {
   // Search for places using Nominatim
   searchPlaces: async (query: string) => {
     try {
+      console.log('Searching places with Nominatim:', query);
       const response = await fetch(
         `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(query)}&limit=10&addressdetails=1`
       );
@@ -76,6 +79,7 @@ export const freeApiService = {
   // Geocode address using Nominatim
   geocodeAddress: async (address: string) => {
     try {
+      console.log('Geocoding address with Nominatim:', address);
       const response = await fetch(
         `${NOMINATIM_BASE_URL}/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`
       );
@@ -113,6 +117,7 @@ export const freeApiService = {
         return freeApiService.searchPlaces(`${cityName} tourist attractions`);
       }
 
+      console.log('Searching tourist places with Foursquare:', cityName);
       const response = await fetch(
         `${FOURSQUARE_BASE_URL}/places/search?query=${encodeURIComponent(cityName + ' tourist attractions')}&limit=20`,
         {
@@ -163,29 +168,41 @@ export const freeApiService = {
     try {
       const apiKey = await getOpenRouteKey();
       if (!apiKey) {
-        throw new Error('OpenRoute API key not available');
+        console.error('OpenRoute API key not available');
+        return { routes: [], status: 'ERROR' };
       }
+
+      console.log('Getting directions with OpenRouteService from', origin, 'to', destination);
 
       // First geocode the addresses
       const originGeocode = await freeApiService.geocodeAddress(origin);
       const destGeocode = await freeApiService.geocodeAddress(destination);
 
       if (originGeocode.status !== 'OK' || destGeocode.status !== 'OK') {
-        throw new Error('Could not geocode addresses');
+        console.error('Could not geocode addresses');
+        return { routes: [], status: 'ZERO_RESULTS' };
       }
 
       const originCoords = originGeocode.results[0].geometry.location;
       const destCoords = destGeocode.results[0].geometry.location;
 
-      const response = await fetch(
-        `${OPENROUTE_BASE_URL}/v2/directions/driving-car?api_key=${apiKey}&start=${originCoords.lng},${originCoords.lat}&end=${destCoords.lng},${destCoords.lat}`
-      );
+      console.log('Origin coords:', originCoords);
+      console.log('Destination coords:', destCoords);
+
+      const directionsUrl = `${OPENROUTE_BASE_URL}/v2/directions/driving-car?api_key=${apiKey}&start=${originCoords.lng},${originCoords.lat}&end=${destCoords.lng},${destCoords.lat}`;
+      console.log('Directions URL:', directionsUrl);
+
+      const response = await fetch(directionsUrl);
 
       if (!response.ok) {
-        throw new Error(`OpenRoute API error: ${response.status}`);
+        console.error(`OpenRoute API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        return { routes: [], status: 'ERROR' };
       }
 
       const data = await response.json();
+      console.log('OpenRoute response:', data);
       
       if (data.features && data.features.length > 0) {
         const route = data.features[0];
@@ -214,7 +231,10 @@ export const freeApiService = {
                 },
                 maneuver: step.type || 'straight'
               })) || []
-            }]
+            }],
+            overview_polyline: {
+              points: route.geometry
+            }
           }],
           status: 'OK'
         };
@@ -232,9 +252,11 @@ export const freeApiService = {
     try {
       const apiKey = await getFoursquareKey();
       if (!apiKey) {
-        throw new Error('Foursquare API key not available');
+        console.error('Foursquare API key not available');
+        return null;
       }
 
+      console.log('Getting place details with Foursquare:', placeId);
       const response = await fetch(
         `${FOURSQUARE_BASE_URL}/places/${placeId}`,
         {

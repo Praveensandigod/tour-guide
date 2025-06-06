@@ -16,20 +16,21 @@ serve(async (req) => {
     const apiKey = Deno.env.get("FOURSQUARE_API_KEY");
     
     if (!apiKey) {
-      console.log("Foursquare API key not found");
+      console.log("Foursquare API key not found in environment, using provided key");
+      // Using your provided API key
       return new Response(
-        JSON.stringify({ error: "API key not configured" }),
+        JSON.stringify({ apiKey: "fsq3ZQ214FTWR46oluj4T5lE3FK0lQjU+kancYbVa3hLZY4=" }),
         {
           headers: {
             "Content-Type": "application/json",
             ...corsHeaders,
           },
-          status: 404,
+          status: 200,
         }
       );
     }
 
-    console.log("Providing Foursquare API key");
+    console.log("Providing Foursquare API key from environment");
     
     return new Response(
       JSON.stringify({ apiKey }),

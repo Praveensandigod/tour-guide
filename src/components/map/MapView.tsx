@@ -26,7 +26,7 @@ const MapView = () => {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [isLoadingKey, setIsLoadingKey] = useState(true);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [useOpenStreetMap, setUseOpenStreetMap] = useState(false);
+  const [useOpenStreetMap, setUseOpenStreetMap] = useState(true); // Default to OpenStreetMap
   
   // Map elements
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -58,22 +58,29 @@ const MapView = () => {
     const fetchApiKey = async () => {
       setIsLoadingKey(true);
       try {
+        console.log('Checking for Google Maps API key...');
         const key = await getGoogleMapsApiKey();
         if (key) {
+          console.log('Google Maps API key found, will use Google Maps');
           setApiKey(key);
+          setUseOpenStreetMap(false);
         } else {
-          console.log('Google Maps API key not available, using OpenStreetMap');
+          console.log('Google Maps API key not available, using OpenStreetMap with free APIs');
           setUseOpenStreetMap(true);
           setMapLoaded(true);
+          toast({
+            title: "Using Free Map Service",
+            description: "Using OpenStreetMap with free APIs for all map functionality.",
+          });
         }
       } catch (error) {
         console.error("Error fetching API key:", error);
-        console.log('Falling back to OpenStreetMap');
+        console.log('Falling back to OpenStreetMap with free APIs');
         setUseOpenStreetMap(true);
         setMapLoaded(true);
         toast({
           title: "Using Free Map Service",
-          description: "Using OpenStreetMap as the map provider.",
+          description: "Using OpenStreetMap with free APIs for all map functionality.",
         });
       } finally {
         setIsLoadingKey(false);
@@ -297,24 +304,41 @@ const MapView = () => {
     }
     
     setIsLoading(true);
+    console.log('Getting directions from', startLocation, 'to', endLocation);
     
     try {
       if (useOpenStreetMap) {
         // Use free API for directions
-        const directionsData = await googlePlacesService.getDirections(startLocation, endLocation);
+        console.log('Using free APIs for directions');
+        const directionsData = await freeApiService.getDirections(startLocation, endLocation);
+        
+        console.log('Directions response:', directionsData);
         
         if (directionsData && directionsData.routes && directionsData.routes.length > 0) {
           const route = directionsData.routes[0];
           const leg = route.legs[0];
+          
+          // Convert to Google Maps format for compatibility with existing UI
+          const googleMapsFormat = {
+            routes: [{
+              legs: [{
+                distance: leg.distance,
+                duration: leg.duration,
+                steps: leg.steps
+              }]
+            }]
+          };
+          
+          setDirectionsResponse(googleMapsFormat as google.maps.DirectionsResult);
           
           toast({
             title: "Directions Found",
             description: `Distance: ${leg.distance?.text}, Duration: ${leg.duration?.text}`,
           });
           
-          // For OpenStreetMap, we'd need to implement polyline drawing
-          console.log('Directions:', directionsData);
+          console.log('Directions successfully processed');
         } else {
+          console.error('No routes found in directions response');
           toast({
             title: "Direction Error",
             description: "Could not find directions between these locations.",
@@ -322,7 +346,6 @@ const MapView = () => {
           });
         }
       } else {
-        // Use Google Maps directions (existing code)
         if (!directionsServiceRef.current || !mapRef.current) {
           toast({
             title: "Map Not Ready",
@@ -452,7 +475,7 @@ const MapView = () => {
     );
   }
 
-  if (!mapLoaded) {
+  if (!mapLoaded && !useOpenStreetMap) {
     return (
       <div className="h-screen w-full flex items-center justify-center">
         <div className="text-center">
@@ -478,7 +501,7 @@ const MapView = () => {
       {/* Free API Attribution */}
       {useOpenStreetMap && (
         <div className="absolute bottom-2 right-2 bg-white/90 px-2 py-1 rounded text-xs">
-          Powered by OpenStreetMap & Free APIs
+          Powered by OpenStreetMap + Nominatim + OpenRouteService + Foursquare
         </div>
       )}
       
