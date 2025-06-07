@@ -170,8 +170,8 @@ const MapView = () => {
         onMapClick={handleMapClick}
       />
       
-      {/* Directions Panel positioned in bottom left, 25% above bottom */}
-      <div className="absolute bottom-[25%] left-4 z-10">
+      {/* Directions Panel positioned in bottom left, 25% above bottom - ALWAYS VISIBLE */}
+      <div className="absolute bottom-[25%] left-4 z-20 pointer-events-auto">
         <DirectionsPanel 
           onDirectionsRequest={handleDirectionsRequest}
           isLoading={isLoading}
@@ -180,7 +180,7 @@ const MapView = () => {
       </div>
       
       {isLoading && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-background/90 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg border">
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-background/90 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg border z-10">
           <div className="flex items-center space-x-2">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
             <span className="text-sm">Processing...</span>

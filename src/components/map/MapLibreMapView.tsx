@@ -31,7 +31,27 @@ const MapLibreMapView: React.FC<MapLibreMapViewProps> = ({
     try {
       map.current = new maplibregl.Map({
         container: mapContainer.current,
-        style: 'https://demotiles.maplibre.org/style.json', // Free MapLibre style with roads and cities
+        // Using a style that shows detailed labels for countries, states, cities and roads
+        style: {
+          version: 8,
+          sources: {
+            'osm': {
+              type: 'raster',
+              tiles: [
+                'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+              ],
+              tileSize: 256,
+              attribution: '© OpenStreetMap contributors'
+            }
+          },
+          layers: [
+            {
+              id: 'osm',
+              type: 'raster',
+              source: 'osm'
+            }
+          ]
+        },
         center: center,
         zoom: zoom,
         attributionControl: {
@@ -42,6 +62,12 @@ const MapLibreMapView: React.FC<MapLibreMapViewProps> = ({
 
       // Add navigation controls
       map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+      // Add scale control
+      map.current.addControl(new maplibregl.ScaleControl({
+        maxWidth: 100,
+        unit: 'metric'
+      }), 'bottom-left');
 
       // Add click event
       if (onMapClick) {
@@ -65,7 +91,7 @@ const MapLibreMapView: React.FC<MapLibreMapViewProps> = ({
 
       map.current.on('load', () => {
         setMapLoaded(true);
-        console.log('MapLibre map loaded successfully');
+        console.log('MapLibre map loaded successfully with detailed labels');
       });
 
       map.current.on('error', (e) => {
@@ -144,7 +170,7 @@ const MapLibreMapView: React.FC<MapLibreMapViewProps> = ({
         <div className="absolute inset-0 flex items-center justify-center bg-muted z-10">
           <div className="flex items-center space-x-2">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-            <span className="text-sm">Loading map...</span>
+            <span className="text-sm">Loading detailed map...</span>
           </div>
         </div>
       )}
