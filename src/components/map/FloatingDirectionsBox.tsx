@@ -53,7 +53,11 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
         setDirectionResult({
           distance: leg.distance.text,
           duration: leg.duration.text,
-          steps: leg.steps.slice(0, 5) // Show first 5 steps
+          steps: leg.steps.slice(0, 5).map(step => ({
+            instructions: step.instructions,
+            distance: step.distance.text,
+            duration: step.duration.text
+          }))
         });
         
         toast({
