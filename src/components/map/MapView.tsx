@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import SimpleMapView from './SimpleMapView';
+import MapboxMapView from './MapboxMapView';
 import DirectionsPanel from './DirectionsPanel';
-import { freeMapService, Place, Route } from '@/services/freeMapService';
+import { freeMapService, Route } from '@/services/freeMapService';
 import { useToast } from '@/components/ui/use-toast';
 
 interface MapMarker {
@@ -159,11 +159,10 @@ const MapView = () => {
 
   return (
     <div className="relative w-full h-full">
-      <SimpleMapView
+      <MapboxMapView
         center={mapCenter}
         zoom={13}
         markers={markers}
-        route={currentRoute}
         onMapClick={handleMapClick}
       />
       

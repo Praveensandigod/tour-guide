@@ -5,7 +5,7 @@ import { useDestinations } from '@/contexts/DestinationContext';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Bookmark, Map, LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon, Star } from 'lucide-react';
-import { freeMapService } from '@/services/freeMapService';
+import { imageService } from '@/utils/imageService';
 
 interface DestinationCardProps {
   destination: Destination;
@@ -13,32 +13,20 @@ interface DestinationCardProps {
 
 const DestinationCard = ({ destination }: DestinationCardProps) => {
   const { saveDestination, isSaved } = useDestinations();
-  const [enhancedData, setEnhancedData] = useState<any>(null);
   const [imageUrl, setImageUrl] = useState(destination.imageUrl);
   
   // Check if this is a free API place result
   const isFreeApiPlace = destination.id.startsWith('free-') || destination.isGooglePlace;
   
-  // Get enhanced data from free map service for local destinations
+  // Generate unique image based on place name and category
   useEffect(() => {
-    const fetchEnhancedData = async () => {
-      if (!destination.name || isFreeApiPlace) return;
-      
-      try {
-        const searchResults = await freeMapService.searchPlaces(destination.name, 1);
-        
-        if (searchResults && searchResults.length > 0) {
-          const place = searchResults[0];
-          setEnhancedData(place);
-          setImageUrl(place.imageUrl);
-        }
-      } catch (error) {
-        console.error('Error fetching enhanced data:', error);
-      }
-    };
-    
-    fetchEnhancedData();
-  }, [destination.name, isFreeApiPlace]);
+    const uniqueImage = imageService.getPlaceImage(
+      destination.name, 
+      destination.category, 
+      destination.types
+    );
+    setImageUrl(uniqueImage);
+  }, [destination.name, destination.category, destination.types]);
   
   const getBudgetLabel = (budget: string) => {
     switch (budget) {
@@ -81,9 +69,9 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   };
   
   const budgetInfo = getBudgetLabel(destination.budget);
-  const displayRating = enhancedData?.rating || destination.rating;
-  const displayName = enhancedData?.name || destination.name;
-  const displayAddress = enhancedData?.address || destination.location;
+  const displayRating = destination.rating;
+  const displayName = destination.name;
+  const displayAddress = destination.location;
   
   // For free API places, use the place_id for navigation
   const placeId = destination.place_id || destination.id.replace('free-', '');
@@ -104,9 +92,9 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
           <img
             src={imageUrl}
             alt={displayName}
-            className="w-full h-48 object-cover"
+            className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
             onError={(e) => {
-              const fallbackUrl = `https://images.unsplash.com/photo-1472396961693-142e6e269027?w=400&h=300&fit=crop`;
+              const fallbackUrl = imageService.getPlaceImage('fallback', 'attraction');
               (e.target as HTMLImageElement).src = fallbackUrl;
             }}
           />
@@ -130,12 +118,6 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             {getCategoryIcon(destination.category)}
             {getCategoryLabel(destination.category)}
           </div>
-          
-          {(enhancedData || isFreeApiPlace) && (
-            <div className="absolute top-2 left-2 bg-green-600/80 text-white px-2 py-0.5 rounded-full text-xs">
-              Enhanced
-            </div>
-          )}
         </div>
         
         <div className="p-4">
@@ -183,9 +165,9 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
         to="/map"
         state={{ 
           destinationId: destination.id,
-          placeId: enhancedData?.id || placeId,
+          placeId: placeId,
           placeName: displayName,
-          placeDetails: enhancedData || destination
+          placeDetails: destination
         }}
         className="flex items-center justify-center gap-2 p-3 bg-muted/50 border-t text-sm font-medium hover:bg-muted transition-colors"
         onClick={(e) => e.stopPropagation()}

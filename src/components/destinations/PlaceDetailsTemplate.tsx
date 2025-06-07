@@ -2,6 +2,7 @@
 import React from 'react';
 import { Star, MapPin, Globe, Clock, Phone, Camera, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { imageService } from '@/utils/imageService';
 
 interface PlaceDetailsTemplateProps {
   place: {
@@ -37,58 +38,24 @@ const PlaceDetailsTemplate: React.FC<PlaceDetailsTemplateProps> = ({
     }
   };
 
-  // Generate Unsplash images based on place type
-  const getUnsplashImages = () => {
-    const types = place.types || [];
-    const name = place.name.toLowerCase();
-    
-    const images = [];
-    
-    if (types.some(type => type.includes('temple')) || name.includes('temple')) {
-      images.push(`https://images.unsplash.com/photo-1466442929976-97f336a657be?w=800&h=600&fit=crop`);
-      images.push(`https://images.unsplash.com/photo-1492321936769-b49830bc1d1e?w=800&h=600&fit=crop`);
-    } else if (types.some(type => type.includes('museum')) || name.includes('museum') || name.includes('fort')) {
-      images.push(`https://images.unsplash.com/photo-1527576539890-dfa815648363?w=800&h=600&fit=crop`);
-      images.push(`https://images.unsplash.com/photo-1488970073972-7f93fe33e297?w=800&h=600&fit=crop`);
-    } else if (types.some(type => type.includes('park')) || name.includes('park') || name.includes('garden')) {
-      images.push(`https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&h=600&fit=crop`);
-      images.push(`https://images.unsplash.com/photo-1523712999610-f77fbcfc3843?w=800&h=600&fit=crop`);
-    } else if (name.includes('palace') || name.includes('hotel')) {
-      images.push(`https://images.unsplash.com/photo-1721322800607-8c38375eef04?w=800&h=600&fit=crop`);
-      images.push(`https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&h=600&fit=crop`);
-    } else if (name.includes('beach') || name.includes('lake')) {
-      images.push(`https://images.unsplash.com/photo-1500375592092-40eb2168fd21?w=800&h=600&fit=crop`);
-      images.push(`https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&h=600&fit=crop`);
-    } else if (name.includes('mountain') || name.includes('falls')) {
-      images.push(`https://images.unsplash.com/photo-1469041797191-50ace28483c3?w=800&h=600&fit=crop`);
-      images.push(`https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&h=600&fit=crop`);
-    } else {
-      // Default images
-      images.push(`https://images.unsplash.com/photo-1472396961693-142e6e269027?w=800&h=600&fit=crop`);
-      images.push(`https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=800&h=600&fit=crop`);
-    }
-    
-    // Add more variety
-    images.push(`https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?w=800&h=600&fit=crop`);
-    images.push(`https://images.unsplash.com/photo-1482938289607-e9573fc25ebb?w=800&h=600&fit=crop`);
-    
-    return images;
-  };
+  // Generate unique images for this place
+  const placeImages = place.photos?.length 
+    ? place.photos 
+    : imageService.getPlaceGallery(place.name, place.category, 6);
 
   const budgetInfo = getBudgetInfo(place.budget);
-  const images = place.photos?.length ? place.photos : getUnsplashImages();
 
   return (
     <div className="bg-background rounded-lg shadow-lg overflow-hidden">
       {/* Hero Image Section */}
-      {images.length > 0 && (
+      {placeImages.length > 0 && (
         <div className="relative h-64 md:h-80">
           <img
-            src={images[0]}
+            src={placeImages[0]}
             alt={place.name}
             className="w-full h-full object-cover"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1472396961693-142e6e269027?w=800&h=600&fit=crop';
+              (e.target as HTMLImageElement).src = imageService.getPlaceImage('fallback', 'attraction');
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
@@ -106,7 +73,7 @@ const PlaceDetailsTemplate: React.FC<PlaceDetailsTemplateProps> = ({
 
       <div className="p-6">
         {/* Title and Rating (if no hero image) */}
-        {(!images || images.length === 0) && (
+        {(!placeImages || placeImages.length === 0) && (
           <div className="mb-6">
             <h1 className="text-2xl md:text-3xl font-bold mb-2">{place.name}</h1>
             {place.formatted_address && (
@@ -189,21 +156,21 @@ const PlaceDetailsTemplate: React.FC<PlaceDetailsTemplateProps> = ({
         </div>
 
         {/* Photo Gallery */}
-        {images.length > 1 && (
+        {placeImages.length > 1 && (
           <div className="mb-6">
             <h2 className="text-xl font-bold mb-3 flex items-center">
               <Camera size={20} className="mr-2" />
-              Photos ({images.length})
+              Photos ({placeImages.length})
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {images.slice(1, 7).map((photo, index) => (
+              {placeImages.slice(1, 7).map((photo, index) => (
                 <img 
                   key={index}
                   src={photo} 
                   alt={`${place.name} ${index + 2}`} 
                   className="rounded-lg h-32 w-full object-cover hover:scale-105 transition-transform duration-200 cursor-pointer"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = `https://images.unsplash.com/photo-${1472396961693 + index}-142e6e269027?w=300&h=200&fit=crop`;
+                    (e.target as HTMLImageElement).src = imageService.getPlaceImage(`${place.name}_${index}`, place.category);
                   }}
                 />
               ))}
