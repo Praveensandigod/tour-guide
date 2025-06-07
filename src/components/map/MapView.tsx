@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import MapboxMapView from './MapboxMapView';
+import MapLibreMapView from './MapLibreMapView';
 import DirectionsPanel from './DirectionsPanel';
 import { freeMapService, Route } from '@/services/freeMapService';
 import { useToast } from '@/components/ui/use-toast';
@@ -159,7 +159,7 @@ const MapView = () => {
 
   return (
     <div className="relative w-full h-full">
-      <MapboxMapView
+      <MapLibreMapView
         center={mapCenter}
         zoom={13}
         markers={markers}

@@ -29,7 +29,7 @@ export const imageService = {
         'photo-1527576539890-dfa815648363', // Museum exterior
         'photo-1488970073972-7f93fe33e297', // Historical building
         'photo-1518709268805-4e9042af2176', // Palace architecture
-        'photo-1470219556762-1771e7f9427d', // Fort walls
+        'photo-1470219556762-1771e7f427d', // Fort walls
         'photo-1582555002c8e-4a3f4d0b1e6f'  // Heritage site
       ];
       const randomImage = museumImages[Math.abs(hashString(placeName)) % museumImages.length];

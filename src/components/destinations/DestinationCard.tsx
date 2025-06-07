@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Destination } from '@/types';
 import { useDestinations } from '@/contexts/DestinationContext';
@@ -20,13 +19,14 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   
   // Generate unique image based on place name and category
   useEffect(() => {
+    const destinationTypes = (destination as any).types || [];
     const uniqueImage = imageService.getPlaceImage(
       destination.name, 
       destination.category, 
-      destination.types
+      destinationTypes
     );
     setImageUrl(uniqueImage);
-  }, [destination.name, destination.category, destination.types]);
+  }, [destination.name, destination.category]);
   
   const getBudgetLabel = (budget: string) => {
     switch (budget) {
