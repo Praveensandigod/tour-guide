@@ -38,10 +38,13 @@ const PlaceDetailsTemplate: React.FC<PlaceDetailsTemplateProps> = ({
     }
   };
 
-  // Generate unique images for this place
+  // Generate unique images for this specific place
   const placeImages = place.photos?.length 
     ? place.photos 
     : imageService.getPlaceGallery(place.name, place.category, 6);
+
+  // Get additional detailed photos for the photos section
+  const detailedPhotos = imageService.getPlacePhotos(place.name, place.category);
 
   const budgetInfo = getBudgetInfo(place.budget);
 
@@ -155,19 +158,19 @@ const PlaceDetailsTemplate: React.FC<PlaceDetailsTemplateProps> = ({
           )}
         </div>
 
-        {/* Photo Gallery */}
+        {/* Gallery Preview */}
         {placeImages.length > 1 && (
           <div className="mb-6">
             <h2 className="text-xl font-bold mb-3 flex items-center">
               <Camera size={20} className="mr-2" />
-              Photos ({placeImages.length})
+              Gallery Preview
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {placeImages.slice(1, 7).map((photo, index) => (
+              {placeImages.slice(1, 4).map((photo, index) => (
                 <img 
                   key={index}
                   src={photo} 
-                  alt={`${place.name} ${index + 2}`} 
+                  alt={`${place.name} view ${index + 2}`} 
                   className="rounded-lg h-32 w-full object-cover hover:scale-105 transition-transform duration-200 cursor-pointer"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = imageService.getPlaceImage(`${place.name}_${index}`, place.category);
@@ -180,11 +183,42 @@ const PlaceDetailsTemplate: React.FC<PlaceDetailsTemplateProps> = ({
 
         {/* Action Button */}
         {onViewOnMap && (
-          <Button onClick={onViewOnMap} className="w-full md:w-auto">
+          <Button onClick={onViewOnMap} className="w-full md:w-auto mb-6">
             <MapPin className="mr-2" size={16} />
             View on Map
           </Button>
         )}
+
+        {/* Detailed Photos Section */}
+        <div className="border-t pt-6">
+          <h2 className="text-2xl font-bold mb-4 flex items-center">
+            <Camera size={24} className="mr-2 text-primary" />
+            Photos of {place.name}
+          </h2>
+          <p className="text-muted-foreground mb-6">
+            Explore more stunning views and detailed perspectives of this amazing destination.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {detailedPhotos.map((photo, index) => (
+              <div key={index} className="group relative overflow-hidden rounded-lg shadow-md">
+                <img 
+                  src={photo} 
+                  alt={`${place.name} detailed view ${index + 1}`} 
+                  className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-110"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = imageService.getPlaceImage(`${place.name}_detail_${index}`, place.category);
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <div className="absolute bottom-2 left-2 text-white text-sm font-medium">
+                    View {index + 1}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

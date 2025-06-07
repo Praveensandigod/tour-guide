@@ -120,33 +120,33 @@ export const imageService = {
       return `https://images.unsplash.com/${randomImage}?w=400&h=300&fit=crop`;
     }
     
-    // City-specific images for major Indian cities
+    // City-specific images for major places
     if (name.includes('delhi') || name.includes('new delhi')) {
-      return 'https://images.unsplash.com/photo-1587474260584-136574528ed5?w=400&h=300&fit=crop'; // Red Fort Delhi
+      return `https://images.unsplash.com/photo-1587474260584-136574528ed5?w=400&h=300&fit=crop&seed=${hashString(placeName)}`;
     }
     if (name.includes('mumbai') || name.includes('bombay')) {
-      return 'https://images.unsplash.com/photo-1570168007204-dfb528c6958f?w=400&h=300&fit=crop'; // Mumbai skyline
+      return `https://images.unsplash.com/photo-1570168007204-dfb528c6958f?w=400&h=300&fit=crop&seed=${hashString(placeName)}`;
     }
     if (name.includes('kolkata') || name.includes('calcutta')) {
-      return 'https://images.unsplash.com/photo-1558431382-27dd19eada6c?w=400&h=300&fit=crop'; // Victoria Memorial
+      return `https://images.unsplash.com/photo-1558431382-27dd19eada6c?w=400&h=300&fit=crop&seed=${hashString(placeName)}`;
     }
     if (name.includes('chennai') || name.includes('madras')) {
-      return 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=400&h=300&fit=crop'; // Chennai Marina
+      return `https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=400&h=300&fit=crop&seed=${hashString(placeName)}`;
     }
     if (name.includes('bangalore') || name.includes('bengaluru')) {
-      return 'https://images.unsplash.com/photo-1596176530529-78163a4f7af2?w=400&h=300&fit=crop'; // Bangalore palace
+      return `https://images.unsplash.com/photo-1596176530529-78163a4f7af2?w=400&h=300&fit=crop&seed=${hashString(placeName)}`;
     }
     if (name.includes('hyderabad')) {
-      return 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop'; // Charminar
+      return `https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop&seed=${hashString(placeName)}`;
     }
     if (name.includes('jaipur')) {
-      return 'https://images.unsplash.com/photo-1609920658906-8223bd289001?w=400&h=300&fit=crop'; // Hawa Mahal
+      return `https://images.unsplash.com/photo-1609920658906-8223bd289001?w=400&h=300&fit=crop&seed=${hashString(placeName)}`;
     }
     if (name.includes('agra')) {
-      return 'https://images.unsplash.com/photo-1564507592333-c60657eea523?w=400&h=300&fit=crop'; // Taj Mahal
+      return `https://images.unsplash.com/photo-1564507592333-c60657eea523?w=400&h=300&fit=crop&seed=${hashString(placeName)}`;
     }
     
-    // Default tourist attraction images
+    // Default tourist attraction images with unique seeds
     const defaultImages = [
       'photo-1472396961693-142e6e269027', // Scenic landscape
       'photo-1433086966358-54859d0ed716', // Mountain view
@@ -156,32 +156,62 @@ export const imageService = {
     ];
     
     const randomImage = defaultImages[Math.abs(hashString(placeName)) % defaultImages.length];
-    return `https://images.unsplash.com/${randomImage}?w=400&h=300&fit=crop`;
+    return `https://images.unsplash.com/${randomImage}?w=400&h=300&fit=crop&seed=${hashString(placeName)}`;
   },
 
   // Generate multiple images for a place gallery
-  getPlaceGallery: (placeName: string, category?: string, count: number = 4): string[] => {
+  getPlaceGallery: (placeName: string, category?: string, count: number = 6): string[] => {
     const images = [];
     const baseImage = this.getPlaceImage(placeName, category);
     images.push(baseImage);
     
-    // Generate additional related images
+    // Generate additional related images with variations
     for (let i = 1; i < count; i++) {
-      const variantName = `${placeName}_variant_${i}`;
-      images.push(this.getPlaceImage(variantName, category));
+      const variantName = `${placeName}_view_${i}`;
+      const variantImage = this.getPlaceImage(variantName, category);
+      images.push(variantImage);
     }
     
     return images;
+  },
+
+  // Get specific place photos by search terms
+  getPlacePhotos: (placeName: string, category?: string): string[] => {
+    const searchTerms = [
+      `${placeName} architecture`,
+      `${placeName} interior`,
+      `${placeName} exterior`,
+      `${placeName} details`,
+      `${placeName} surroundings`,
+      `${placeName} landscape`
+    ];
+    
+    return searchTerms.map((term, index) => {
+      const hash = hashString(term);
+      const imageIds = [
+        'photo-1472396961693-142e6e269027',
+        'photo-1433086966358-54859d0ed716',
+        'photo-1506905925346-21bda4d32df4',
+        'photo-1465146344425-f00d5f5c8f07',
+        'photo-1482938289607-e9573fc25ebb',
+        'photo-1469041797191-50ace28483c3'
+      ];
+      
+      const imageId = imageIds[Math.abs(hash) % imageIds.length];
+      return `https://images.unsplash.com/${imageId}?w=600&h=400&fit=crop&seed=${hash}`;
+    });
   }
 };
 
 // Simple hash function to generate consistent randomness for place names
 function hashString(str: string): number {
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
+  if (str && str.length > 0) {
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
   }
   return Math.abs(hash);
 }

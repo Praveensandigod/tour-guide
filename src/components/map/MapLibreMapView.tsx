@@ -16,7 +16,7 @@ interface MapLibreMapViewProps {
 
 const MapLibreMapView: React.FC<MapLibreMapViewProps> = ({
   center = [78.9629, 20.5937], // Default to India (lng, lat for MapLibre)
-  zoom = 5,
+  zoom = 3, // Zoomed out to show continent level
   markers = [],
   onMapClick
 }) => {
@@ -31,10 +31,13 @@ const MapLibreMapView: React.FC<MapLibreMapViewProps> = ({
     try {
       map.current = new maplibregl.Map({
         container: mapContainer.current,
-        style: 'https://demotiles.maplibre.org/style.json', // Free MapLibre style
+        style: 'https://demotiles.maplibre.org/style.json', // Free MapLibre style with roads and cities
         center: center,
         zoom: zoom,
-        attributionControl: true
+        attributionControl: {
+          compact: true,
+          customAttribution: 'MapLibre | OpenStreetMap'
+        }
       });
 
       // Add navigation controls

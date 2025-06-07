@@ -17,6 +17,7 @@ const MapView = () => {
   const location = useLocation();
   const { toast } = useToast();
   const [mapCenter, setMapCenter] = useState<[number, number]>([20.5937, 78.9629]);
+  const [mapZoom, setMapZoom] = useState<number>(3); // Continent level zoom
   const [markers, setMarkers] = useState<MapMarker[]>([]);
   const [currentRoute, setCurrentRoute] = useState<Route | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,6 +37,7 @@ const MapView = () => {
         if (placeDetails?.geometry?.location) {
           const { lat, lng } = placeDetails.geometry.location;
           setMapCenter([lat, lng]);
+          setMapZoom(13); // Zoom to place level when specific place is selected
           setMarkers([{
             position: [lat, lng],
             title: placeName,
@@ -47,6 +49,7 @@ const MapView = () => {
           const coords = await freeMapService.geocode(placeName);
           if (coords) {
             setMapCenter([coords.lat, coords.lng]);
+            setMapZoom(13); // Zoom to place level
             setMarkers([{
               position: [coords.lat, coords.lng],
               title: placeName,
@@ -133,6 +136,7 @@ const MapView = () => {
         const centerLat = (originCoords.lat + destCoords.lat) / 2;
         const centerLng = (originCoords.lng + destCoords.lng) / 2;
         setMapCenter([centerLat, centerLng]);
+        setMapZoom(8); // Appropriate zoom for route view
 
         toast({
           title: "Route Found",
@@ -161,16 +165,19 @@ const MapView = () => {
     <div className="relative w-full h-full">
       <MapLibreMapView
         center={mapCenter}
-        zoom={13}
+        zoom={mapZoom}
         markers={markers}
         onMapClick={handleMapClick}
       />
       
-      <DirectionsPanel 
-        onDirectionsRequest={handleDirectionsRequest}
-        isLoading={isLoading}
-        currentRoute={currentRoute}
-      />
+      {/* Directions Panel positioned in bottom left, 25% above bottom */}
+      <div className="absolute bottom-[25%] left-4 z-10">
+        <DirectionsPanel 
+          onDirectionsRequest={handleDirectionsRequest}
+          isLoading={isLoading}
+          currentRoute={currentRoute}
+        />
+      </div>
       
       {isLoading && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-background/90 backdrop-blur-sm px-4 py-2 rounded-lg shadow-lg border">
