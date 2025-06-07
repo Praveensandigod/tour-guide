@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -17,17 +18,7 @@ interface AuthContextType {
 }
 
 // Create the context with a default value
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  isAuthenticated: false,
-  isLoading: true,
-  login: async () => ({ success: false }),
-  register: async () => ({ success: false }),
-  logout: async () => {},
-  deleteAccount: async () => ({ success: false }),
-  forgotPassword: async () => ({ success: false }),
-  updatePassword: async () => ({ success: false }),
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -299,7 +290,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Creating the context value
-  const value = {
+  const value: AuthContextType = {
     user,
     isAuthenticated,
     isLoading,
@@ -318,4 +309,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
