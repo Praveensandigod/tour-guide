@@ -20,10 +20,20 @@ import PlaceDetailPage from '@/pages/PlaceDetailPage';
 import BottomNav from '@/components/navigation/BottomNav';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
+// Create QueryClient instance outside component to prevent recreation
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
+    },
+  },
+});
+
 function App() {
   return (
-    <Router>
-      <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={queryClient}>
+      <Router>
         <AuthProvider>
           <DestinationProvider>
             <div className="min-h-screen bg-background">
@@ -78,8 +88,8 @@ function App() {
             </div>
           </DestinationProvider>
         </AuthProvider>
-      </QueryClientProvider>
-    </Router>
+      </Router>
+    </QueryClientProvider>
   );
 }
 
