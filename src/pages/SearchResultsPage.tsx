@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import SearchBar from '@/components/destinations/SearchBar';
 import DestinationCard from '@/components/destinations/DestinationCard';
-import { mapsService } from '@/utils/mapsService';
+import { freeMapService } from '@/services/freeMapService';
 import { useToast } from '@/components/ui/use-toast';
 
 interface TouristPlace {
@@ -51,114 +51,57 @@ const SearchResultsPage = () => {
       
       try {
         if (searchType === 'city') {
-          // Fetch tourist places for the city using free APIs
+          // Fetch tourist places for the city using free map service
           const cityName = query.replace(/tourist places|attractions|places in|city|in|visit/gi, '').trim();
           
           if (cityName.length < 2) {
             throw new Error('City name too short');
           }
           
-          const freeApiData = await mapsService.searchTouristPlaces(cityName);
+          const touristPlaces = await freeMapService.searchTouristPlaces(cityName);
           
-          if (freeApiData && freeApiData.results) {
-            const touristPlaces = await Promise.all(
-              freeApiData.results.map(async (place: any) => {
-                let imageUrl = `https://images.unsplash.com/photo-1472396961693-142e6e269027?w=400&h=300&fit=crop`;
-                
-                if (place.photos && place.photos.length > 0) {
-                  try {
-                    const photoUrl = await mapsService.getPhotoUrl(place.photos[0]);
-                    if (photoUrl) imageUrl = photoUrl;
-                  } catch (error) {
-                    console.error('Error getting photo:', error);
-                  }
-                }
-
-                // Get category from place types
-                const types = place.types || [];
-                let category = 'attraction';
-                if (types.includes('museum')) category = 'historical';
-                else if (types.includes('park')) category = 'nature';
-                else if (types.includes('church') || types.includes('hindu_temple')) category = 'temple';
-                else if (types.includes('tourist_attraction')) category = 'monument';
-
-                return {
-                  id: `free-${place.place_id}`,
-                  name: place.name,
-                  location: place.formatted_address || '',
-                  imageUrl,
-                  rating: place.rating || 4.0,
-                  description: `Explore ${place.name}, a popular tourist attraction in ${cityName}. Discover the rich culture and amazing experiences this place has to offer.`,
-                  category,
-                  budget: place.budget || 'medium',
-                  place_id: place.place_id,
-                  isFreeApiPlace: true,
-                  coordinates: place.geometry?.location
-                };
-              })
-            );
-            
-            setResults(touristPlaces);
-          } else {
-            setResults([]);
-          }
+          const formattedResults = touristPlaces.map(place => ({
+            id: `free-${place.id}`,
+            name: place.name,
+            location: place.address,
+            imageUrl: place.imageUrl,
+            rating: place.rating,
+            description: `Explore ${place.name}, a popular tourist attraction in ${cityName}. Discover the rich culture and amazing experiences this place has to offer.`,
+            category: place.category,
+            budget: 'medium',
+            place_id: place.id,
+            isFreeApiPlace: true,
+            coordinates: {
+              lat: place.lat,
+              lng: place.lng
+            }
+          }));
+          
+          setResults(formattedResults);
         } else {
           // Regular search - combine local and free API results
           const localResults = searchDestinations(query);
           
-          try {
-            const freeApiData = await mapsService.searchPlaces(query);
-            let freeApiResults: any[] = [];
-            
-            if (freeApiData && freeApiData.results) {
-              freeApiResults = await Promise.all(
-                freeApiData.results.slice(0, 10).map(async (place: any) => {
-                  let imageUrl = `https://images.unsplash.com/photo-1472396961693-142e6e269027?w=400&h=300&fit=crop`;
-                  
-                  if (place.photos && place.photos.length > 0) {
-                    try {
-                      const photoUrl = await mapsService.getPhotoUrl(place.photos[0]);
-                      if (photoUrl) imageUrl = photoUrl;
-                    } catch (error) {
-                      console.error('Error getting photo:', error);
-                    }
-                  }
-
-                  const types = place.types || [];
-                  let category = 'attraction';
-                  if (types.includes('museum')) category = 'historical';
-                  else if (types.includes('park')) category = 'nature';
-                  else if (types.includes('church') || types.includes('hindu_temple')) category = 'temple';
-                  else if (types.includes('tourist_attraction')) category = 'monument';
-
-                  return {
-                    id: `free-${place.place_id}`,
-                    name: place.name,
-                    location: place.formatted_address || '',
-                    imageUrl,
-                    rating: place.rating || 4.0,
-                    description: `Discover ${place.name}. A wonderful place to visit with amazing experiences and rich culture.`,
-                    category,
-                    budget: place.budget || 'medium',
-                    place_id: place.place_id,
-                    isFreeApiPlace: true,
-                    coordinates: place.geometry?.location
-                  };
-                })
-              );
+          const apiPlaces = await freeMapService.searchPlaces(query, 10);
+          const apiResults = apiPlaces.map(place => ({
+            id: `free-${place.id}`,
+            name: place.name,
+            location: place.address,
+            imageUrl: place.imageUrl,
+            rating: place.rating,
+            description: `Discover ${place.name}. A wonderful place to visit with amazing experiences and rich culture.`,
+            category: place.category,
+            budget: 'medium',
+            place_id: place.id,
+            isFreeApiPlace: true,
+            coordinates: {
+              lat: place.lat,
+              lng: place.lng
             }
-            
-            // Combine local and free API results
-            setResults([...localResults, ...freeApiResults]);
-          } catch (error) {
-            console.error('Error fetching from free APIs:', error);
-            setResults(localResults);
-            toast({
-              title: "API Warning",
-              description: "Some search features may be limited. Showing local results.",
-              variant: "destructive"
-            });
-          }
+          }));
+          
+          // Combine local and free API results
+          setResults([...localResults, ...apiResults]);
         }
       } catch (error) {
         console.error('Error fetching search results:', error);

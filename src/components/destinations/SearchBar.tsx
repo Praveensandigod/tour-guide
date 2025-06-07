@@ -1,10 +1,11 @@
+
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, MapPin, Star } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { useDebounce } from 'use-debounce';
-import { mapsService } from '@/utils/mapsService';
+import { freeMapService } from '@/services/freeMapService';
 
 interface SearchResult {
   id: string;
@@ -12,7 +13,7 @@ interface SearchResult {
   location: string;
   imageUrl: string;
   rating?: number;
-  isGooglePlace?: boolean;
+  isFreeApiPlace?: boolean;
   place_id?: string;
   geometry?: any;
   types?: string[];
@@ -58,38 +59,18 @@ const SearchBar = () => {
           // Search for tourist places in the city
           const cityName = debouncedQuery.replace(/tourist places|attractions|places in|city|in|visit/gi, '').trim();
           
-          const data = await mapsService.searchTouristPlaces(cityName);
+          const touristPlaces = await freeMapService.searchTouristPlaces(cityName);
           
-          if (data && data.results) {
-            const touristPlaces = await Promise.all(
-              data.results.slice(0, 8).map(async (place: any) => {
-                let imageUrl = 'https://via.placeholder.com/300x200';
-                
-                if (place.photos && place.photos.length > 0) {
-                  try {
-                    const photoUrl = await mapsService.getPhotoUrl(place.photos[0].photo_reference);
-                    if (photoUrl) imageUrl = photoUrl;
-                  } catch (error) {
-                    console.error('Error getting photo:', error);
-                  }
-                }
-
-                return {
-                  id: place.place_id,
-                  name: place.name,
-                  location: place.formatted_address || '',
-                  imageUrl,
-                  rating: place.rating || 0,
-                  isGooglePlace: true,
-                  place_id: place.place_id,
-                  geometry: place.geometry,
-                  types: place.types || []
-                };
-              })
-            );
-            
-            combinedResults = touristPlaces;
-          }
+          combinedResults = touristPlaces.map(place => ({
+            id: place.id,
+            name: place.name,
+            location: place.address,
+            imageUrl: place.imageUrl,
+            rating: place.rating,
+            isFreeApiPlace: true,
+            place_id: place.id,
+            geometry: { location: { lat: place.lat, lng: place.lng } }
+          }));
         } else {
           // Regular place search
           // Search local destinations first
@@ -100,41 +81,21 @@ const SearchBar = () => {
             location: dest.location,
             imageUrl: dest.imageUrl,
             rating: dest.rating,
-            isGooglePlace: false
+            isFreeApiPlace: false
           }));
 
-          // Search with free APIs
-          let apiResults: SearchResult[] = [];
-          const data = await mapsService.searchPlaces(debouncedQuery);
-          
-          if (data && data.results) {
-            apiResults = await Promise.all(
-              data.results.slice(0, 5).map(async (place: any) => {
-                let imageUrl = 'https://via.placeholder.com/100';
-                
-                if (place.photos && place.photos.length > 0) {
-                  try {
-                    const photoUrl = await mapsService.getPhotoUrl(place.photos[0].photo_reference);
-                    if (photoUrl) imageUrl = photoUrl;
-                  } catch (error) {
-                    console.error('Error getting photo:', error);
-                  }
-                }
-
-                return {
-                  id: place.place_id,
-                  name: place.name,
-                  location: place.formatted_address || '',
-                  imageUrl,
-                  rating: place.rating || 0,
-                  isGooglePlace: true,
-                  place_id: place.place_id,
-                  geometry: place.geometry,
-                  types: place.types || []
-                };
-              })
-            );
-          }
+          // Search with free map service
+          const apiPlaces = await freeMapService.searchPlaces(debouncedQuery, 5);
+          const apiResults: SearchResult[] = apiPlaces.map(place => ({
+            id: place.id,
+            name: place.name,
+            location: place.address,
+            imageUrl: place.imageUrl,
+            rating: place.rating,
+            isFreeApiPlace: true,
+            place_id: place.id,
+            geometry: { location: { lat: place.lat, lng: place.lng } }
+          }));
 
           combinedResults = [...formattedLocalResults, ...apiResults];
         }
@@ -149,7 +110,7 @@ const SearchBar = () => {
           location: dest.location,
           imageUrl: dest.imageUrl,
           rating: dest.rating,
-          isGooglePlace: false
+          isFreeApiPlace: false
         })));
       } finally {
         setIsLoading(false);
@@ -166,7 +127,6 @@ const SearchBar = () => {
       setIsSearchActive(false);
       
       if (searchMode === 'cities') {
-        // Navigate to city results page
         navigate(`/search?q=${encodeURIComponent(query)}&type=city`);
       } else {
         navigate(`/search?q=${encodeURIComponent(query)}`);
@@ -189,13 +149,13 @@ const SearchBar = () => {
   };
 
   const handleResultClick = (result: SearchResult) => {
-    if (result.isGooglePlace) {
-      navigate(`/places/google-${result.id}`, { 
+    if (result.isFreeApiPlace) {
+      navigate(`/places/free-${result.id}`, { 
         state: { 
           placeId: result.place_id, 
           placeName: result.name,
           placeDetails: result,
-          isGooglePlace: true
+          isFreeApiPlace: true
         } 
       });
     } else {
@@ -263,7 +223,7 @@ const SearchBar = () => {
           
           {!isLoading && searchResults.length > 0 && searchResults.map(result => (
             <div
-              key={`${result.isGooglePlace ? 'api' : 'local'}-${result.id}`}
+              key={`${result.isFreeApiPlace ? 'api' : 'local'}-${result.id}`}
               className="flex items-center p-3 border-b last:border-b-0 cursor-pointer hover:bg-muted/50"
               onClick={() => handleResultClick(result)}
             >
@@ -273,20 +233,20 @@ const SearchBar = () => {
                   alt={result.name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/100';
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1472396961693-142e6e269027?w=100&h=100&fit=crop';
                   }}
                 />
               </div>
               <div className="flex-1">
                 <h4 className="font-medium text-sm flex items-center">
                   {result.name}
-                  {result.isGooglePlace && (
-                    <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-1 py-0.5 rounded">
-                      API
+                  {result.isFreeApiPlace && (
+                    <span className="ml-2 text-xs bg-green-100 text-green-600 px-1 py-0.5 rounded">
+                      Free
                     </span>
                   )}
                   {searchMode === 'cities' && (
-                    <span className="ml-2 text-xs bg-green-100 text-green-600 px-1 py-0.5 rounded">
+                    <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-1 py-0.5 rounded">
                       Tourist
                     </span>
                   )}

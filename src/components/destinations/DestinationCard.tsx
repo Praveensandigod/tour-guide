@@ -1,10 +1,11 @@
+
 import { useState, useEffect } from 'react';
 import { Destination } from '@/types';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Bookmark, Map, LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon, Star } from 'lucide-react';
-import { mapsService } from '@/utils/mapsService';
+import { freeMapService } from '@/services/freeMapService';
 
 interface DestinationCardProps {
   destination: Destination;
@@ -14,46 +15,30 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   const { saveDestination, isSaved } = useDestinations();
   const [enhancedData, setEnhancedData] = useState<any>(null);
   const [imageUrl, setImageUrl] = useState(destination.imageUrl);
-  const [isLoading, setIsLoading] = useState(false);
   
   // Check if this is a free API place result
   const isFreeApiPlace = destination.id.startsWith('free-') || destination.isGooglePlace;
   
-  // Fetch enhanced data from free APIs for local destinations
+  // Get enhanced data from free map service for local destinations
   useEffect(() => {
     const fetchEnhancedData = async () => {
       if (!destination.name || isFreeApiPlace) return;
       
-      setIsLoading(true);
       try {
-        const searchResults = await mapsService.searchPlaces(destination.name);
+        const searchResults = await freeMapService.searchPlaces(destination.name, 1);
         
-        if (searchResults && searchResults.results && searchResults.results.length > 0) {
-          const place = searchResults.results[0];
-          const placeDetails = await mapsService.getPlaceDetails(place.place_id);
-          
-          if (placeDetails) {
-            setEnhancedData(placeDetails);
-            
-            // Handle photos from free API (direct URLs)
-            if (placeDetails.photos && placeDetails.photos.length > 0) {
-              const photoUrl = Array.isArray(placeDetails.photos) ? placeDetails.photos[0] : placeDetails.photos;
-              if (typeof photoUrl === 'string') {
-                setImageUrl(photoUrl);
-              }
-            }
-          }
+        if (searchResults && searchResults.length > 0) {
+          const place = searchResults[0];
+          setEnhancedData(place);
+          setImageUrl(place.imageUrl);
         }
       } catch (error) {
         console.error('Error fetching enhanced data:', error);
-      } finally {
-        setIsLoading(false);
       }
     };
     
     fetchEnhancedData();
   }, [destination.name, isFreeApiPlace]);
-  
   
   const getBudgetLabel = (budget: string) => {
     switch (budget) {
@@ -98,7 +83,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   const budgetInfo = getBudgetLabel(destination.budget);
   const displayRating = enhancedData?.rating || destination.rating;
   const displayName = enhancedData?.name || destination.name;
-  const displayAddress = enhancedData?.formatted_address || destination.location;
+  const displayAddress = enhancedData?.address || destination.location;
   
   // For free API places, use the place_id for navigation
   const placeId = destination.place_id || destination.id.replace('free-', '');
@@ -121,18 +106,11 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             alt={displayName}
             className="w-full h-48 object-cover"
             onError={(e) => {
-              if (imageUrl !== destination.imageUrl) {
-                setImageUrl(destination.imageUrl);
-              } else {
-                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300';
-              }
+              const fallbackUrl = `https://images.unsplash.com/photo-1472396961693-142e6e269027?w=400&h=300&fit=crop`;
+              (e.target as HTMLImageElement).src = fallbackUrl;
             }}
           />
-          {isLoading && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-              <div className="text-white text-sm">Loading enhanced data...</div>
-            </div>
-          )}
+          
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -155,7 +133,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
           
           {(enhancedData || isFreeApiPlace) && (
             <div className="absolute top-2 left-2 bg-green-600/80 text-white px-2 py-0.5 rounded-full text-xs">
-              Free API Enhanced
+              Enhanced
             </div>
           )}
         </div>
@@ -192,29 +170,12 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
                 ))}
               </div>
               <span className="ml-1 text-xs font-medium">{displayRating.toFixed(1)}</span>
-              {(enhancedData || isFreeApiPlace) && (
-                <span className="ml-2 text-xs text-green-600">(Free API)</span>
-              )}
             </div>
             
             <span className="text-primary text-sm font-medium hover:underline">
               View Details
             </span>
           </div>
-          
-          {(enhancedData?.website || destination.website) && (
-            <div className="mt-2">
-              <a 
-                href={enhancedData?.website || destination.website} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-xs text-blue-600 hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Visit Official Website
-              </a>
-            </div>
-          )}
         </div>
       </Link>
       
@@ -222,7 +183,7 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
         to="/map"
         state={{ 
           destinationId: destination.id,
-          placeId: enhancedData?.place_id || placeId,
+          placeId: enhancedData?.id || placeId,
           placeName: displayName,
           placeDetails: enhancedData || destination
         }}
