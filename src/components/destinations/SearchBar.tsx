@@ -1,12 +1,11 @@
-
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, MapPin, Star } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { useDebounce } from 'use-debounce';
-import { getGoogleMapsApiKey } from '@/config/apiConfig';
-import { googlePlacesService } from '@/utils/googleMapsService';
+import { getMapboxApiKey } from '@/config/apiConfig';
+import { mapboxService } from '@/utils/mapboxService';
 
 interface SearchResult {
   id: string;
@@ -14,7 +13,7 @@ interface SearchResult {
   location: string;
   imageUrl: string;
   rating?: number;
-  isGooglePlace?: boolean;
+  isMapboxPlace?: boolean;
   place_id?: string;
   geometry?: any;
   types?: string[];
@@ -36,10 +35,13 @@ const SearchBar = () => {
   useEffect(() => {
     const fetchApiKey = async () => {
       try {
-        const key = await getGoogleMapsApiKey();
-        setApiKey(key);
+        const key = await getMapboxApiKey();
+        if (key) {
+          setApiKey(key);
+          mapboxService.setApiKey(key);
+        }
       } catch (error) {
-        console.error("Error fetching Google Maps API key:", error);
+        console.error("Error fetching Mapbox API key:", error);
       }
     };
     
@@ -77,16 +79,16 @@ const SearchBar = () => {
           const touristQuery = `tourist attractions in ${cityName}`;
           
           if (apiKey) {
-            const googleData = await googlePlacesService.searchPlaces(touristQuery);
+            const mapboxData = await mapboxService.searchPlaces(touristQuery);
             
-            if (googleData && googleData.results) {
+            if (mapboxData && mapboxData.results) {
               const touristPlaces = await Promise.all(
-                googleData.results.slice(0, 8).map(async (place: any) => {
+                mapboxData.results.slice(0, 8).map(async (place: any) => {
                   let imageUrl = 'https://via.placeholder.com/300x200';
                   
                   if (place.photos && place.photos.length > 0) {
                     try {
-                      const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
+                      const photoUrl = await mapboxService.getPhotoUrl(place.photos[0].photo_reference);
                       if (photoUrl) imageUrl = photoUrl;
                     } catch (error) {
                       console.error('Error getting photo:', error);
@@ -99,7 +101,7 @@ const SearchBar = () => {
                     location: place.formatted_address || '',
                     imageUrl,
                     rating: place.rating || 0,
-                    isGooglePlace: true,
+                    isMapboxPlace: true,
                     place_id: place.place_id,
                     geometry: place.geometry,
                     types: place.types || []
@@ -120,22 +122,22 @@ const SearchBar = () => {
             location: dest.location,
             imageUrl: dest.imageUrl,
             rating: dest.rating,
-            isGooglePlace: false
+            isMapboxPlace: false
           }));
 
-          // Search Google Places if API key is available
-          let googleResults: SearchResult[] = [];
+          // Search Mapbox Places if API key is available
+          let mapboxResults: SearchResult[] = [];
           if (apiKey) {
-            const googleData = await googlePlacesService.searchPlaces(debouncedQuery);
+            const mapboxData = await mapboxService.searchPlaces(debouncedQuery);
             
-            if (googleData && googleData.results) {
-              googleResults = await Promise.all(
-                googleData.results.slice(0, 5).map(async (place: any) => {
+            if (mapboxData && mapboxData.results) {
+              mapboxResults = await Promise.all(
+                mapboxData.results.slice(0, 5).map(async (place: any) => {
                   let imageUrl = 'https://via.placeholder.com/100';
                   
                   if (place.photos && place.photos.length > 0) {
                     try {
-                      const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
+                      const photoUrl = await mapboxService.getPhotoUrl(place.photos[0].photo_reference);
                       if (photoUrl) imageUrl = photoUrl;
                     } catch (error) {
                       console.error('Error getting photo:', error);
@@ -148,7 +150,7 @@ const SearchBar = () => {
                     location: place.formatted_address || '',
                     imageUrl,
                     rating: place.rating || 0,
-                    isGooglePlace: true,
+                    isMapboxPlace: true,
                     place_id: place.place_id,
                     geometry: place.geometry,
                     types: place.types || []
@@ -158,7 +160,7 @@ const SearchBar = () => {
             }
           }
 
-          combinedResults = [...formattedLocalResults, ...googleResults];
+          combinedResults = [...formattedLocalResults, ...mapboxResults];
         }
 
         setSearchResults(combinedResults);
@@ -171,7 +173,7 @@ const SearchBar = () => {
           location: dest.location,
           imageUrl: dest.imageUrl,
           rating: dest.rating,
-          isGooglePlace: false
+          isMapboxPlace: false
         })));
       } finally {
         setIsLoading(false);
@@ -180,7 +182,7 @@ const SearchBar = () => {
 
     performSearch();
   }, [debouncedQuery, apiKey, searchDestinations, searchMode]);
-  
+
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (query.trim()) {
@@ -211,13 +213,13 @@ const SearchBar = () => {
   };
 
   const handleResultClick = (result: SearchResult) => {
-    if (result.isGooglePlace) {
-      navigate(`/places/google-${result.id}`, { 
+    if (result.isMapboxPlace) {
+      navigate(`/places/mapbox-${result.id}`, { 
         state: { 
           placeId: result.place_id, 
           placeName: result.name,
           placeDetails: result,
-          isGooglePlace: true
+          isMapboxPlace: true
         } 
       });
     } else {
@@ -285,7 +287,7 @@ const SearchBar = () => {
           
           {!isLoading && searchResults.length > 0 && searchResults.map(result => (
             <div
-              key={`${result.isGooglePlace ? 'google' : 'local'}-${result.id}`}
+              key={`${result.isMapboxPlace ? 'mapbox' : 'local'}-${result.id}`}
               className="flex items-center p-3 border-b last:border-b-0 cursor-pointer hover:bg-muted/50"
               onClick={() => handleResultClick(result)}
             >
@@ -302,9 +304,9 @@ const SearchBar = () => {
               <div className="flex-1">
                 <h4 className="font-medium text-sm flex items-center">
                   {result.name}
-                  {result.isGooglePlace && (
+                  {result.isMapboxPlace && (
                     <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-1 py-0.5 rounded">
-                      Google
+                      Mapbox
                     </span>
                   )}
                   {searchMode === 'cities' && (

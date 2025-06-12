@@ -1,11 +1,11 @@
-
 import { useState, useEffect } from 'react';
 import { Destination } from '@/types';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Bookmark, Map, LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon, Star } from 'lucide-react';
-import { googlePlacesService } from '@/utils/googleMapsService';
+import { mapboxService } from '@/utils/mapboxService';
+import { generatePlaceImageUrl } from '@/utils/imageService';
 
 interface DestinationCardProps {
   destination: Destination;
@@ -17,46 +17,62 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   const [imageUrl, setImageUrl] = useState(destination.imageUrl);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Check if this is a Google Places result
-  const isGooglePlace = destination.id.startsWith('google-') || destination.isGooglePlace;
+  // Check if this is a Mapbox Places result
+  const isMapboxPlace = destination.id.startsWith('mapbox-') || destination.isMapboxPlace;
   
-  // Fetch enhanced data from Google Places API for local destinations
+  // Fetch enhanced data from Mapbox Places API for local destinations
   useEffect(() => {
     const fetchEnhancedData = async () => {
-      if (!destination.name || isGooglePlace) return;
+      if (!destination.name || isMapboxPlace) {
+        // For Mapbox places or to enhance images, generate better image URLs
+        const enhancedImageUrl = generatePlaceImageUrl(destination.name);
+        setImageUrl(enhancedImageUrl);
+        return;
+      }
       
       setIsLoading(true);
       try {
-        const searchResults = await googlePlacesService.searchPlaces(destination.name);
+        const searchResults = await mapboxService.searchPlaces(destination.name);
         
         if (searchResults && searchResults.results && searchResults.results.length > 0) {
           const place = searchResults.results[0];
-          const placeDetails = await googlePlacesService.getPlaceDetails(place.place_id);
+          const placeDetails = await mapboxService.getPlaceDetails(place.place_id);
           
           if (placeDetails) {
             setEnhancedData(placeDetails);
             
             if (placeDetails.photos && placeDetails.photos.length > 0) {
               try {
-                const photoUrl = await googlePlacesService.getPhotoUrl(placeDetails.photos[0].photo_reference);
+                const photoUrl = await mapboxService.getPhotoUrl(placeDetails.photos[0].photo_reference);
                 if (photoUrl) {
                   setImageUrl(photoUrl);
                 }
               } catch (error) {
                 console.error('Error fetching photo:', error);
+                // Fallback to generated image
+                setImageUrl(generatePlaceImageUrl(destination.name));
               }
+            } else {
+              // Fallback to generated image
+              setImageUrl(generatePlaceImageUrl(destination.name));
             }
           }
+        } else {
+          // Fallback to generated image
+          setImageUrl(generatePlaceImageUrl(destination.name));
         }
       } catch (error) {
         console.error('Error fetching enhanced data:', error);
+        // Fallback to generated image
+        setImageUrl(generatePlaceImageUrl(destination.name));
       } finally {
         setIsLoading(false);
       }
     };
     
     fetchEnhancedData();
-  }, [destination.name, isGooglePlace]);
+  }, [destination.name, isMapboxPlace]);
+
   
   const getBudgetLabel = (budget: string) => {
     switch (budget) {
@@ -103,17 +119,17 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   const displayName = enhancedData?.name || destination.name;
   const displayAddress = enhancedData?.formatted_address || destination.location;
   
-  // For Google Places, use the place_id for navigation
-  const placeId = destination.place_id || destination.id.replace('google-', '');
+  // For Mapbox Places, use the place_id for navigation
+  const placeId = destination.place_id || destination.id.replace('mapbox-', '');
   
   return (
     <div className="destination-card group cursor-pointer">
       <Link 
-        to={`/places/${isGooglePlace ? `google-${placeId}` : destination.id}`}
-        state={isGooglePlace ? {
+        to={`/places/${isMapboxPlace ? `mapbox-${placeId}` : destination.id}`}
+        state={isMapboxPlace ? {
           placeId: placeId,
           placeName: displayName,
-          isGooglePlace: true,
+          isMapboxPlace: true,
           placeDetails: destination
         } : undefined}
         className="block"
@@ -127,7 +143,8 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
               if (imageUrl !== destination.imageUrl) {
                 setImageUrl(destination.imageUrl);
               } else {
-                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300';
+                const fallbackUrl = generatePlaceImageUrl(destination.name);
+                (e.target as HTMLImageElement).src = fallbackUrl;
               }
             }}
           />
@@ -156,9 +173,9 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             {getCategoryLabel(destination.category)}
           </div>
           
-          {(enhancedData || isGooglePlace) && (
-            <div className="absolute top-2 left-2 bg-green-600/80 text-white px-2 py-0.5 rounded-full text-xs">
-              Google Enhanced
+          {(enhancedData || isMapboxPlace) && (
+            <div className="absolute top-2 left-2 bg-blue-600/80 text-white px-2 py-0.5 rounded-full text-xs">
+              Mapbox Enhanced
             </div>
           )}
         </div>
@@ -195,8 +212,8 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
                 ))}
               </div>
               <span className="ml-1 text-xs font-medium">{displayRating.toFixed(1)}</span>
-              {(enhancedData || isGooglePlace) && (
-                <span className="ml-2 text-xs text-green-600">(Google)</span>
+              {(enhancedData || isMapboxPlace) && (
+                <span className="ml-2 text-xs text-blue-600">(Mapbox)</span>
               )}
             </div>
             

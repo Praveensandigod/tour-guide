@@ -5,7 +5,8 @@ import { ArrowRight, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Destination } from '@/types';
 import { useState, useEffect } from 'react';
-import { googlePlacesService } from '@/utils/googleMapsService';
+import { mapboxService } from '@/utils/mapboxService';
+import { generatePlaceImageUrl } from '@/utils/imageService';
 
 interface FeaturedDestinationsProps {
   destinations: Destination[];
@@ -29,16 +30,13 @@ const FeaturedDestinations = ({ destinations }: FeaturedDestinationsProps) => {
       const enhanced = await Promise.all(
         destinations.map(async (destination): Promise<EnhancedDestination> => {
           try {
-            const searchResults = await googlePlacesService.searchPlaces(destination.name);
+            // Always generate better images using our image service
+            const enhancedImage = generatePlaceImageUrl(destination.name);
+            
+            const searchResults = await mapboxService.searchPlaces(destination.name);
             
             if (searchResults && searchResults.results && searchResults.results.length > 0) {
               const place = searchResults.results[0];
-              
-              let enhancedImage = destination.imageUrl;
-              if (place.photos && place.photos.length > 0) {
-                const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
-                if (photoUrl) enhancedImage = photoUrl;
-              }
               
               return {
                 ...destination,
@@ -50,7 +48,10 @@ const FeaturedDestinations = ({ destinations }: FeaturedDestinationsProps) => {
             console.error('Error enhancing destination:', error);
           }
           
-          return destination;
+          return {
+            ...destination,
+            enhancedImage: generatePlaceImageUrl(destination.name)
+          };
         })
       );
       
@@ -85,6 +86,10 @@ const FeaturedDestinations = ({ destinations }: FeaturedDestinationsProps) => {
                   src={(destination as EnhancedDestination).enhancedImage || destination.imageUrl}
                   alt={destination.name}
                   className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  onError={(e) => {
+                    const fallbackUrl = generatePlaceImageUrl(destination.name);
+                    (e.target as HTMLImageElement).src = fallbackUrl;
+                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/70"></div>
                 <div className="absolute bottom-0 left-0 p-4 text-white">

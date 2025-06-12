@@ -11,7 +11,7 @@ interface FloatingDirectionsBoxProps {
   setEndLocation: (value: string) => void;
   handleDirections: () => void;
   isLoading: boolean;
-  directionsResponse: google.maps.DirectionsResult | null;
+  directionsResponse: any;
   speakDirections: () => void;
   isSpeakingDirections: boolean;
   onClose: () => void;
@@ -29,7 +29,7 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
   isSpeakingDirections,
   onClose
 }) => {
-  const [position, setPosition] = useState({ x: 20, y: 20 });
+  const [position, setPosition] = useState({ x: 20, y: window.innerHeight * 0.25 });
   const [isDragging, setIsDragging] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -159,8 +159,8 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
           {directionsResponse && directionsResponse.routes && directionsResponse.routes.length > 0 && (
             <div className="mt-4">
               <div className="text-sm mb-2">
-                <p className="font-bold">Distance: {directionsResponse.routes[0].legs[0].distance?.text}</p>
-                <p className="font-bold">Duration: {directionsResponse.routes[0].legs[0].duration?.text}</p>
+                <p className="font-bold">Distance: {(directionsResponse.routes[0].legs[0].distance / 1000).toFixed(1)} km</p>
+                <p className="font-bold">Duration: {Math.round(directionsResponse.routes[0].legs[0].duration / 60)} min</p>
               </div>
               
               <Button 
@@ -181,22 +181,19 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
               
               <div className="max-h-40 overflow-y-auto">
                 <h4 className="text-sm font-semibold mb-2">Directions:</h4>
-                {directionsResponse.routes[0].legs[0].steps.slice(0, 5).map((step, index) => (
+                {directionsResponse.routes[0].legs[0].steps.slice(0, 5).map((step: any, index: number) => (
                   <div key={index} className="text-xs mb-2 p-2 bg-muted rounded">
                     <div className="flex items-center">
-                      {step.maneuver?.includes('left') && <ArrowLeft size={12} className="mr-1" />}
-                      {step.maneuver?.includes('right') && <ArrowRight size={12} className="mr-1" />}
-                      {step.maneuver?.includes('straight') && <ArrowRight size={12} className="mr-1" />}
-                      {step.maneuver?.includes('turn') && <RotateCcw size={12} className="mr-1" />}
+                      {step.maneuver?.type?.includes('left') && <ArrowLeft size={12} className="mr-1" />}
+                      {step.maneuver?.type?.includes('right') && <ArrowRight size={12} className="mr-1" />}
+                      {step.maneuver?.type?.includes('straight') && <ArrowRight size={12} className="mr-1" />}
+                      {step.maneuver?.type?.includes('turn') && <RotateCcw size={12} className="mr-1" />}
                       <span className="font-semibold mr-1">{index + 1}.</span>
                     </div>
-                    <div 
-                      dangerouslySetInnerHTML={{ 
-                        __html: step.instructions.replace(/<b>/g, '<strong>').replace(/<\/b>/g, '</strong>') 
-                      }} 
-                      className="mt-1"
-                    />
-                    <div className="text-gray-500 mt-1">{step.distance?.text}</div>
+                    <div className="mt-1">
+                      {step.instruction || step.maneuver?.type || 'Continue straight'}
+                    </div>
+                    <div className="text-gray-500 mt-1">{(step.distance / 1000).toFixed(1)} km</div>
                   </div>
                 ))}
               </div>

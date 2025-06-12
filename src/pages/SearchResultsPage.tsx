@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import SearchBar from '@/components/destinations/SearchBar';
 import DestinationCard from '@/components/destinations/DestinationCard';
-import { googlePlacesService } from '@/utils/googleMapsService';
-import { getGoogleMapsApiKey } from '@/config/apiConfig';
+import { mapboxService } from '@/utils/mapboxService';
+import { getMapboxApiKey } from '@/config/apiConfig';
 
 interface TouristPlace {
   id: string;
@@ -17,7 +16,7 @@ interface TouristPlace {
   category: string;
   budget: string;
   place_id: string;
-  isGooglePlace: boolean;
+  isMapboxPlace: boolean;
 }
 
 const SearchResultsPage = () => {
@@ -33,10 +32,13 @@ const SearchResultsPage = () => {
   useEffect(() => {
     const fetchApiKey = async () => {
       try {
-        const key = await getGoogleMapsApiKey();
-        setApiKey(key);
+        const key = await getMapboxApiKey();
+        if (key) {
+          setApiKey(key);
+          mapboxService.setApiKey(key);
+        }
       } catch (error) {
-        console.error("Error fetching Google Maps API key:", error);
+        console.error("Error fetching Mapbox API key:", error);
       }
     };
     
@@ -63,16 +65,16 @@ const SearchResultsPage = () => {
           const touristQuery = `tourist attractions in ${cityName}`;
           
           if (apiKey) {
-            const googleData = await googlePlacesService.searchPlaces(touristQuery);
+            const mapboxData = await mapboxService.searchPlaces(touristQuery);
             
-            if (googleData && googleData.results) {
+            if (mapboxData && mapboxData.results) {
               const touristPlaces = await Promise.all(
-                googleData.results.map(async (place: any) => {
+                mapboxData.results.map(async (place: any) => {
                   let imageUrl = 'https://via.placeholder.com/300x200';
                   
                   if (place.photos && place.photos.length > 0) {
                     try {
-                      const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
+                      const photoUrl = await mapboxService.getPhotoUrl(place.photos[0].photo_reference);
                       if (photoUrl) imageUrl = photoUrl;
                     } catch (error) {
                       console.error('Error getting photo:', error);
@@ -88,7 +90,7 @@ const SearchResultsPage = () => {
                   else if (types.includes('tourist_attraction')) category = 'monument';
 
                   return {
-                    id: `google-${place.place_id}`,
+                    id: `mapbox-${place.place_id}`,
                     name: place.name,
                     location: place.formatted_address || '',
                     imageUrl,
@@ -97,7 +99,7 @@ const SearchResultsPage = () => {
                     category,
                     budget: 'medium',
                     place_id: place.place_id,
-                    isGooglePlace: true
+                    isMapboxPlace: true
                   };
                 })
               );
@@ -126,6 +128,7 @@ const SearchResultsPage = () => {
     fetchResults();
   }, [query, searchType, searchDestinations, setCurrentSearchQuery, currentSearchQuery, navigate, apiKey]);
 
+  
   if (isLoading) {
     return (
       <div className="container mx-auto max-w-4xl pb-24">
