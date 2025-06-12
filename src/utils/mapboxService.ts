@@ -1,3 +1,4 @@
+
 const MAPBOX_BASE_URL = 'https://api.mapbox.com';
 
 interface MapboxGeocodingResponse {
@@ -51,23 +52,33 @@ class MapboxService {
 
   setApiKey(key: string) {
     this.apiKey = key;
+    console.log('Mapbox API key set, length:', key ? key.length : 0);
   }
 
   async searchPlaces(query: string): Promise<any> {
     if (!this.apiKey) {
-      throw new Error('Mapbox API key not set');
+      console.error('Mapbox API key not set');
+      return { results: [] };
     }
 
     try {
+      console.log('Searching places for:', query);
       const response = await fetch(
         `${MAPBOX_BASE_URL}/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${this.apiKey}&types=poi,place&limit=10`
       );
       
+      console.log('Mapbox search response status:', response.status);
+      
       if (!response.ok) {
+        if (response.status === 403) {
+          console.error('Mapbox API access forbidden - check token permissions');
+          return { results: [] };
+        }
         throw new Error(`Mapbox API error: ${response.status}`);
       }
       
       const data: MapboxGeocodingResponse = await response.json();
+      console.log('Mapbox search results:', data.features?.length || 0);
       
       return {
         results: data.features.map(feature => ({
@@ -91,22 +102,26 @@ class MapboxService {
       };
     } catch (error) {
       console.error('Error searching places:', error);
-      throw error;
+      return { results: [] };
     }
   }
 
   async getPlaceDetails(placeId: string): Promise<any> {
     if (!this.apiKey) {
-      throw new Error('Mapbox API key not set');
+      console.error('Mapbox API key not set');
+      return null;
     }
 
     try {
-      // For place details, we'll use the place ID to get more information
       const response = await fetch(
         `${MAPBOX_BASE_URL}/geocoding/v5/mapbox.places/${encodeURIComponent(placeId)}.json?access_token=${this.apiKey}`
       );
       
       if (!response.ok) {
+        if (response.status === 403) {
+          console.error('Mapbox API access forbidden for place details');
+          return null;
+        }
         throw new Error(`Mapbox API error: ${response.status}`);
       }
       
@@ -114,7 +129,7 @@ class MapboxService {
       const feature = data.features[0];
       
       if (!feature) {
-        throw new Error('Place not found');
+        return null;
       }
       
       return {
@@ -138,16 +153,13 @@ class MapboxService {
       };
     } catch (error) {
       console.error('Error getting place details:', error);
-      throw error;
+      return null;
     }
   }
 
   async getPhotoUrl(photoReference: string): Promise<string> {
-    // Extract place name from photo reference for better image search
     try {
       const placeName = photoReference.replace('mapbox_', '').split('_').pop() || 'landmark';
-      
-      // Use enhanced image service with place name
       const { generatePlaceImageUrl } = await import('./imageService');
       return generatePlaceImageUrl(placeName, 400, 300);
     } catch (error) {

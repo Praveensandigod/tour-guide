@@ -1,21 +1,18 @@
 
 export const generatePlaceImageUrl = (placeName: string, width: number = 400, height: number = 300): string => {
-  // Clean the place name for better image results
   const cleanPlaceName = placeName
-    .replace(/[^\w\s]/g, '') // Remove special characters
-    .replace(/\s+/g, ' ') // Normalize spaces
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
   
-  // Create more specific search terms for better image matching
+  // Use more specific search terms for better image matching
   const searchTerms = [
     cleanPlaceName,
     'landmark',
-    'architecture',
     'tourist attraction',
     'destination'
   ].join(' ');
   
-  // Add a timestamp to ensure unique images
   const timestamp = Date.now();
   
   return `https://source.unsplash.com/${width}x${height}/?${encodeURIComponent(searchTerms)}&sig=${timestamp}`;
@@ -64,15 +61,12 @@ export const getCategoryImageUrl = (category: string, placeName?: string): strin
 // Enhanced function to get place-specific images with fallback
 export const getPlaceImageWithFallback = async (placeName: string): Promise<string> => {
   try {
-    // Try to get a high-quality image for the specific place
     const specificImage = generatePlaceImageUrl(placeName, 800, 600);
     
-    // Test if the image loads
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => resolve(specificImage);
       img.onerror = () => {
-        // Fallback to a more generic search
         const fallbackImage = `https://source.unsplash.com/800x600/?${encodeURIComponent(placeName + ' travel destination')}&sig=${Date.now()}`;
         resolve(fallbackImage);
       };
