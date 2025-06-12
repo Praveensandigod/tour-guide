@@ -1,4 +1,3 @@
-
 const MAPBOX_BASE_URL = 'https://api.mapbox.com';
 
 interface MapboxGeocodingResponse {
@@ -84,7 +83,7 @@ class MapboxService {
           rating: Math.random() * 2 + 3, // Random rating between 3-5
           types: feature.place_type,
           photos: [{
-            photo_reference: `mapbox_${feature.id}`,
+            photo_reference: `mapbox_${feature.id}_${feature.text}`,
             width: 400,
             height: 300
           }]
@@ -130,7 +129,7 @@ class MapboxService {
         },
         rating: Math.random() * 2 + 3,
         photos: [{
-          photo_reference: `mapbox_${feature.id}`,
+          photo_reference: `mapbox_${feature.id}_${feature.text}`,
           width: 400,
           height: 300
         }],
@@ -144,15 +143,16 @@ class MapboxService {
   }
 
   async getPhotoUrl(photoReference: string): Promise<string> {
-    // Since Mapbox doesn't have a direct photo API like Google, 
-    // we'll use Unsplash to get place-related images
+    // Extract place name from photo reference for better image search
     try {
-      const placeName = photoReference.replace('mapbox_', '');
-      const unsplashUrl = `https://source.unsplash.com/400x300/?${encodeURIComponent(placeName + ' landmark building architecture')}`;
-      return unsplashUrl;
+      const placeName = photoReference.replace('mapbox_', '').split('_').pop() || 'landmark';
+      
+      // Use enhanced image service with place name
+      const { generatePlaceImageUrl } = await import('./imageService');
+      return generatePlaceImageUrl(placeName, 400, 300);
     } catch (error) {
       console.error('Error getting photo URL:', error);
-      return 'https://source.unsplash.com/400x300/?landmark';
+      return `https://source.unsplash.com/400x300/?landmark&sig=${Date.now()}`;
     }
   }
 
