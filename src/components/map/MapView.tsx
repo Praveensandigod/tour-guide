@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
@@ -49,18 +50,10 @@ const MapView = () => {
       setIsLoadingKey(true);
       try {
         const key = await getMapboxApiKey();
-        console.log('Fetched API key:', key ? 'Yes' : 'No');
         if (key) {
           setApiKey(key);
           mapboxService.setApiKey(key);
           mapboxgl.accessToken = key;
-        } else {
-          console.error('No API key received');
-          toast({
-            title: "API Key Error",
-            description: "Could not load the Mapbox API key.",
-            variant: "destructive"
-          });
         }
       } catch (error) {
         console.error("Error fetching API key:", error);
@@ -76,14 +69,10 @@ const MapView = () => {
     
     fetchApiKey();
   }, [toast]);
-
+  
   useEffect(() => {
-    if (!apiKey || !mapContainerRef.current) {
-      console.log('Map initialization blocked - API key:', !!apiKey, 'Container:', !!mapContainerRef.current);
-      return;
-    }
+    if (!apiKey || !mapContainerRef.current) return;
     
-    console.log('Initializing Mapbox map...');
     setMapLoaded(false);
     
     try {
@@ -97,7 +86,6 @@ const MapView = () => {
       });
       
       map.on('load', () => {
-        console.log('Map loaded successfully');
         setMapLoaded(true);
         
         // Add markers for existing destinations
@@ -143,15 +131,6 @@ const MapView = () => {
         } else if (selectedPlaceId && selectedPlaceName) {
           handleMapboxPlace(selectedPlaceId, map);
         }
-      });
-
-      map.on('error', (e) => {
-        console.error('Map error:', e);
-        toast({
-          title: "Map Error",
-          description: "Failed to load the map. Please check your internet connection.",
-          variant: "destructive"
-        });
       });
       
       mapRef.current = map;

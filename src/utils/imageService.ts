@@ -1,38 +1,37 @@
 
 export const generatePlaceImageUrl = (placeName: string, width: number = 400, height: number = 300): string => {
+  // Clean the place name for better image results
   const cleanPlaceName = placeName
-    .replace(/[^\w\s]/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s]/g, '') // Remove special characters
+    .replace(/\s+/g, ' ') // Normalize spaces
     .trim();
   
-  // Use more specific search terms for better image matching
+  // Create search terms for better image matching
   const searchTerms = [
     cleanPlaceName,
     'landmark',
-    'tourist attraction',
+    'architecture',
+    'travel',
     'destination'
   ].join(' ');
   
-  const timestamp = Date.now();
-  
-  return `https://source.unsplash.com/${width}x${height}/?${encodeURIComponent(searchTerms)}&sig=${timestamp}`;
+  return `https://source.unsplash.com/${width}x${height}/?${encodeURIComponent(searchTerms)}`;
 };
 
 export const generateMultiplePlaceImages = (placeName: string, count: number = 6): string[] => {
   const images: string[] = [];
   const baseTerms = [
-    `${placeName} landmark architecture`,
-    `${placeName} scenic view tourist`,
-    `${placeName} travel destination famous`,
-    `${placeName} tourist attraction historical`,
-    `${placeName} cultural site heritage`,
-    `${placeName} beautiful place visit`
+    'landmark architecture',
+    'scenic view',
+    'travel destination',
+    'tourist attraction',
+    'cultural site',
+    'historical place'
   ];
   
   for (let i = 0; i < count; i++) {
-    const searchTerm = baseTerms[i % baseTerms.length];
-    const timestamp = Date.now() + i;
-    images.push(`https://source.unsplash.com/400x300/?${encodeURIComponent(searchTerm)}&sig=${timestamp}`);
+    const searchTerm = `${placeName} ${baseTerms[i % baseTerms.length]}`;
+    images.push(`https://source.unsplash.com/400x300/?${encodeURIComponent(searchTerm)}&sig=${i}`);
   }
   
   return images;
@@ -40,40 +39,19 @@ export const generateMultiplePlaceImages = (placeName: string, count: number = 6
 
 export const getCategoryImageUrl = (category: string, placeName?: string): string => {
   const categoryMap: Record<string, string> = {
-    historical: 'historical monument architecture heritage',
-    temple: 'temple religious architecture sacred',
-    nature: 'natural landscape scenic mountains',
-    mountain: 'mountain landscape scenic peaks',
-    beach: 'beach ocean tropical paradise',
-    monument: 'monument landmark architecture famous',
-    statue: 'statue sculpture landmark art',
-    attraction: 'tourist attraction landmark famous'
+    historical: 'historical monument architecture',
+    temple: 'temple religious architecture',
+    nature: 'natural landscape scenic',
+    mountain: 'mountain landscape scenic',
+    beach: 'beach ocean tropical',
+    monument: 'monument landmark architecture',
+    statue: 'statue sculpture landmark',
+    attraction: 'tourist attraction landmark'
   };
   
   const searchTerm = placeName 
-    ? `${placeName} ${categoryMap[category] || 'landmark tourism'}`
-    : categoryMap[category] || 'landmark tourism';
+    ? `${placeName} ${categoryMap[category] || 'landmark'}`
+    : categoryMap[category] || 'landmark';
   
-  const timestamp = Date.now();
-  return `https://source.unsplash.com/400x300/?${encodeURIComponent(searchTerm)}&sig=${timestamp}`;
-};
-
-// Enhanced function to get place-specific images with fallback
-export const getPlaceImageWithFallback = async (placeName: string): Promise<string> => {
-  try {
-    const specificImage = generatePlaceImageUrl(placeName, 800, 600);
-    
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve(specificImage);
-      img.onerror = () => {
-        const fallbackImage = `https://source.unsplash.com/800x600/?${encodeURIComponent(placeName + ' travel destination')}&sig=${Date.now()}`;
-        resolve(fallbackImage);
-      };
-      img.src = specificImage;
-    });
-  } catch (error) {
-    console.error('Error loading place image:', error);
-    return `https://source.unsplash.com/800x600/?travel&sig=${Date.now()}`;
-  }
+  return `https://source.unsplash.com/400x300/?${encodeURIComponent(searchTerm)}`;
 };
