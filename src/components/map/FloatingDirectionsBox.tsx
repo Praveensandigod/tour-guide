@@ -1,173 +1,210 @@
-
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import React, { useState, useRef, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Navigation, MapPin, Clock, Route } from 'lucide-react';
-import { mapsService } from '@/utils/mapsService';
-import { useToast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
+import { ArrowRight, Loader2, Volume2, VolumeX, ArrowLeft, RotateCcw, GripHorizontal, X, Minimize2, Maximize2 } from 'lucide-react';
 
 interface FloatingDirectionsBoxProps {
-  isLoading?: boolean;
+  startLocation: string;
+  endLocation: string;
+  setStartLocation: (value: string) => void;
+  setEndLocation: (value: string) => void;
+  handleDirections: () => void;
+  isLoading: boolean;
+  directionsResponse: google.maps.DirectionsResult | null;
+  speakDirections: () => void;
+  isSpeakingDirections: boolean;
+  onClose: () => void;
 }
 
-interface DirectionResult {
-  distance: string;
-  duration: string;
-  steps: Array<{
-    instructions: string;
-    distance: string;
-    duration: string;
-  }>;
-}
-
-const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({ 
-  isLoading = false 
+const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
+  startLocation,
+  endLocation,
+  setStartLocation,
+  setEndLocation,
+  handleDirections,
+  isLoading,
+  directionsResponse,
+  speakDirections,
+  isSpeakingDirections,
+  onClose
 }) => {
-  const [origin, setOrigin] = useState('');
-  const [destination, setDestination] = useState('');
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isGettingDirections, setIsGettingDirections] = useState(false);
-  const [directionResult, setDirectionResult] = useState<DirectionResult | null>(null);
-  const { toast } = useToast();
+  const [position, setPosition] = useState({ x: 20, y: 20 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  const handleGetDirections = async () => {
-    if (!origin.trim() || !destination.trim()) {
-      toast({
-        title: "Missing Information",
-        description: "Please enter both origin and destination.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsGettingDirections(true);
-    setDirectionResult(null);
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!cardRef.current) return;
     
-    try {
-      const directions = await mapsService.getDirections(origin, destination);
-      
-      if (directions && directions.routes && directions.routes.length > 0) {
-        const route = directions.routes[0];
-        const leg = route.legs[0];
-        
-        setDirectionResult({
-          distance: leg.distance.text,
-          duration: leg.duration.text,
-          steps: leg.steps.slice(0, 5).map(step => ({
-            instructions: step.instructions,
-            distance: step.distance.text,
-            duration: step.duration.text
-          }))
-        });
-        
-        toast({
-          title: "Directions Found",
-          description: `Route: ${leg.distance.text}, ${leg.duration.text}`,
-        });
-      } else {
-        toast({
-          title: "No Route Found",
-          description: "Could not find a route between these locations.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Error getting directions:', error);
-      toast({
-        title: "Error",
-        description: "Failed to get directions. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsGettingDirections(false);
-    }
+    const rect = cardRef.current.getBoundingClientRect();
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+    setIsDragging(true);
   };
 
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      
+      const newX = e.clientX - dragOffset.x;
+      const newY = e.clientY - dragOffset.y;
+      
+      // Keep within viewport bounds
+      const maxX = window.innerWidth - 320;
+      const maxY = window.innerHeight - 200;
+      
+      setPosition({
+        x: Math.max(0, Math.min(newX, maxX)),
+        y: Math.max(0, Math.min(newY, maxY))
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
+
   return (
-    <div className="absolute top-4 right-4 z-10">
-      <div className="bg-background/95 backdrop-blur-sm rounded-lg shadow-lg border p-4 w-80 max-h-96 overflow-y-auto">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-sm flex items-center gap-2">
-            <Navigation size={16} />
-            Directions
-          </h3>
+    <Card 
+      ref={cardRef}
+      className="fixed z-50 w-[320px] shadow-lg bg-white/95 backdrop-blur-sm border-2"
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        cursor: isDragging ? 'grabbing' : 'default'
+      }}
+    >
+      <div 
+        className="flex items-center justify-between p-2 border-b cursor-grab active:cursor-grabbing bg-gray-50/80"
+        onMouseDown={handleMouseDown}
+      >
+        <div className="flex items-center gap-2">
+          <GripHorizontal className="w-4 h-4 text-gray-400" />
+          <span className="text-sm font-medium text-gray-700">Directions</span>
+        </div>
+        <div className="flex gap-1">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setIsExpanded(!isExpanded)}
+            className="h-6 w-6 p-0"
+            onClick={() => setIsMinimized(!isMinimized)}
           >
-            {isExpanded ? 'Hide' : 'Show'}
+            {isMinimized ? <Maximize2 className="w-3 h-3" /> : <Minimize2 className="w-3 h-3" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={onClose}
+          >
+            <X className="w-3 h-3" />
           </Button>
         </div>
-        
-        {isExpanded && (
-          <div className="space-y-3">
-            <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
-              <Input
-                placeholder="From (origin)"
-                value={origin}
-                onChange={(e) => setOrigin(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            
-            <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
-              <Input
-                placeholder="To (destination)"
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            
-            <Button 
-              onClick={handleGetDirections}
-              disabled={!origin.trim() || !destination.trim() || isLoading || isGettingDirections}
-              className="w-full"
-            >
-              {isGettingDirections ? 'Getting Directions...' : 'Get Directions'}
-            </Button>
-            
-            {directionResult && (
-              <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <Route size={16} className="text-primary" />
-                  <span className="font-medium">Route Found</span>
-                </div>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                  <span className="flex items-center gap-1">
-                    <Navigation size={14} />
-                    {directionResult.distance}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock size={14} />
-                    {directionResult.duration}
-                  </span>
-                </div>
-                
-                <div className="space-y-2">
-                  <h4 className="font-medium text-sm">Directions:</h4>
-                  {directionResult.steps.map((step, index) => (
-                    <div key={index} className="text-xs text-muted-foreground p-2 bg-background rounded">
-                      <div className="font-medium">{index + 1}. {step.instructions}</div>
-                      <div className="text-xs mt-1">{step.distance} • {step.duration}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {(isLoading || isGettingDirections) && (
-              <div className="text-center text-sm text-muted-foreground">
-                Finding the best route...
-              </div>
-            )}
-          </div>
-        )}
       </div>
-    </div>
+
+      {!isMinimized && (
+        <CardContent className="p-4">
+          <div className="mb-2">
+            <label className="block mb-1 text-sm font-medium">Start Location</label>
+            <Input 
+              placeholder="Enter start location"
+              value={startLocation}
+              onChange={(e) => setStartLocation(e.target.value)}
+              className="mb-2"
+            />
+          </div>
+          
+          <div className="mb-4">
+            <label className="block mb-1 text-sm font-medium">Destination</label>
+            <Input 
+              placeholder="Enter destination"
+              value={endLocation}
+              onChange={(e) => setEndLocation(e.target.value)}
+              className="mb-2"
+            />
+          </div>
+          
+          <Button 
+            className="w-full mb-2" 
+            onClick={handleDirections}
+            disabled={isLoading || !startLocation || !endLocation}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              <>
+                Get Directions
+                <ArrowRight size={16} className="ml-2" />
+              </>
+            )}
+          </Button>
+          
+          {directionsResponse && directionsResponse.routes && directionsResponse.routes.length > 0 && (
+            <div className="mt-4">
+              <div className="text-sm mb-2">
+                <p className="font-bold">Distance: {directionsResponse.routes[0].legs[0].distance?.text}</p>
+                <p className="font-bold">Duration: {directionsResponse.routes[0].legs[0].duration?.text}</p>
+              </div>
+              
+              <Button 
+                variant="outline" 
+                className="w-full flex justify-center items-center mb-2" 
+                onClick={speakDirections}
+              >
+                {isSpeakingDirections ? (
+                  <>
+                    <VolumeX className="mr-2 h-4 w-4" /> Stop Voice
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="mr-2 h-4 w-4" /> Voice Guidance
+                  </>
+                )}
+              </Button>
+              
+              <div className="max-h-40 overflow-y-auto">
+                <h4 className="text-sm font-semibold mb-2">Directions:</h4>
+                {directionsResponse.routes[0].legs[0].steps.slice(0, 5).map((step, index) => (
+                  <div key={index} className="text-xs mb-2 p-2 bg-muted rounded">
+                    <div className="flex items-center">
+                      {step.maneuver?.includes('left') && <ArrowLeft size={12} className="mr-1" />}
+                      {step.maneuver?.includes('right') && <ArrowRight size={12} className="mr-1" />}
+                      {step.maneuver?.includes('straight') && <ArrowRight size={12} className="mr-1" />}
+                      {step.maneuver?.includes('turn') && <RotateCcw size={12} className="mr-1" />}
+                      <span className="font-semibold mr-1">{index + 1}.</span>
+                    </div>
+                    <div 
+                      dangerouslySetInnerHTML={{ 
+                        __html: step.instructions.replace(/<b>/g, '<strong>').replace(/<\/b>/g, '</strong>') 
+                      }} 
+                      className="mt-1"
+                    />
+                    <div className="text-gray-500 mt-1">{step.distance?.text}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
   );
 };
 

@@ -1,10 +1,11 @@
+
 import { useState, useEffect } from 'react';
 import { Destination } from '@/types';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Bookmark, Map, LandmarkIcon, Mountain, Flag, Church, MapPin, Navigation, BuildingIcon, Star } from 'lucide-react';
-import { imageService } from '@/utils/imageService';
+import { googlePlacesService } from '@/utils/googleMapsService';
 
 interface DestinationCardProps {
   destination: Destination;
@@ -12,21 +13,50 @@ interface DestinationCardProps {
 
 const DestinationCard = ({ destination }: DestinationCardProps) => {
   const { saveDestination, isSaved } = useDestinations();
+  const [enhancedData, setEnhancedData] = useState<any>(null);
   const [imageUrl, setImageUrl] = useState(destination.imageUrl);
+  const [isLoading, setIsLoading] = useState(false);
   
-  // Check if this is a free API place result
-  const isFreeApiPlace = destination.id.startsWith('free-') || destination.isGooglePlace;
+  // Check if this is a Google Places result
+  const isGooglePlace = destination.id.startsWith('google-') || destination.isGooglePlace;
   
-  // Generate unique image based on place name and category
+  // Fetch enhanced data from Google Places API for local destinations
   useEffect(() => {
-    const destinationTypes = (destination as any).types || [];
-    const uniqueImage = imageService.getPlaceImage(
-      destination.name, 
-      destination.category, 
-      destinationTypes
-    );
-    setImageUrl(uniqueImage);
-  }, [destination.name, destination.category]);
+    const fetchEnhancedData = async () => {
+      if (!destination.name || isGooglePlace) return;
+      
+      setIsLoading(true);
+      try {
+        const searchResults = await googlePlacesService.searchPlaces(destination.name);
+        
+        if (searchResults && searchResults.results && searchResults.results.length > 0) {
+          const place = searchResults.results[0];
+          const placeDetails = await googlePlacesService.getPlaceDetails(place.place_id);
+          
+          if (placeDetails) {
+            setEnhancedData(placeDetails);
+            
+            if (placeDetails.photos && placeDetails.photos.length > 0) {
+              try {
+                const photoUrl = await googlePlacesService.getPhotoUrl(placeDetails.photos[0].photo_reference);
+                if (photoUrl) {
+                  setImageUrl(photoUrl);
+                }
+              } catch (error) {
+                console.error('Error fetching photo:', error);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching enhanced data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchEnhancedData();
+  }, [destination.name, isGooglePlace]);
   
   const getBudgetLabel = (budget: string) => {
     switch (budget) {
@@ -69,21 +99,21 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
   };
   
   const budgetInfo = getBudgetLabel(destination.budget);
-  const displayRating = destination.rating;
-  const displayName = destination.name;
-  const displayAddress = destination.location;
+  const displayRating = enhancedData?.rating || destination.rating;
+  const displayName = enhancedData?.name || destination.name;
+  const displayAddress = enhancedData?.formatted_address || destination.location;
   
-  // For free API places, use the place_id for navigation
-  const placeId = destination.place_id || destination.id.replace('free-', '');
+  // For Google Places, use the place_id for navigation
+  const placeId = destination.place_id || destination.id.replace('google-', '');
   
   return (
-    <div className="destination-card group cursor-pointer bg-card rounded-lg shadow-md overflow-hidden">
+    <div className="destination-card group cursor-pointer">
       <Link 
-        to={`/places/${isFreeApiPlace ? `free-${placeId}` : destination.id}`}
-        state={isFreeApiPlace ? {
+        to={`/places/${isGooglePlace ? `google-${placeId}` : destination.id}`}
+        state={isGooglePlace ? {
           placeId: placeId,
           placeName: displayName,
-          isFreeApiPlace: true,
+          isGooglePlace: true,
           placeDetails: destination
         } : undefined}
         className="block"
@@ -92,13 +122,20 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
           <img
             src={imageUrl}
             alt={displayName}
-            className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
+            className="w-full h-48 object-cover rounded-t-lg"
             onError={(e) => {
-              const fallbackUrl = imageService.getPlaceImage('fallback', 'attraction');
-              (e.target as HTMLImageElement).src = fallbackUrl;
+              if (imageUrl !== destination.imageUrl) {
+                setImageUrl(destination.imageUrl);
+              } else {
+                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300';
+              }
             }}
           />
-          
+          {isLoading && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-t-lg">
+              <div className="text-white text-sm">Loading enhanced data...</div>
+            </div>
+          )}
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -118,13 +155,19 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             {getCategoryIcon(destination.category)}
             {getCategoryLabel(destination.category)}
           </div>
+          
+          {(enhancedData || isGooglePlace) && (
+            <div className="absolute top-2 left-2 bg-green-600/80 text-white px-2 py-0.5 rounded-full text-xs">
+              Google Enhanced
+            </div>
+          )}
         </div>
         
         <div className="p-4">
           <div className="flex justify-between items-start mb-2">
             <h3 className="font-bold text-lg truncate">{displayName}</h3>
             {budgetInfo.label && (
-              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${budgetInfo.class}`}>{budgetInfo.label}</span>
+              <span className={budgetInfo.class}>{budgetInfo.label}</span>
             )}
           </div>
           
@@ -152,12 +195,29 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
                 ))}
               </div>
               <span className="ml-1 text-xs font-medium">{displayRating.toFixed(1)}</span>
+              {(enhancedData || isGooglePlace) && (
+                <span className="ml-2 text-xs text-green-600">(Google)</span>
+              )}
             </div>
             
             <span className="text-primary text-sm font-medium hover:underline">
               View Details
             </span>
           </div>
+          
+          {(enhancedData?.website || destination.website) && (
+            <div className="mt-2">
+              <a 
+                href={enhancedData?.website || destination.website} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Visit Official Website
+              </a>
+            </div>
+          )}
         </div>
       </Link>
       
@@ -165,9 +225,9 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
         to="/map"
         state={{ 
           destinationId: destination.id,
-          placeId: placeId,
+          placeId: enhancedData?.place_id || placeId,
           placeName: displayName,
-          placeDetails: destination
+          placeDetails: enhancedData || destination
         }}
         className="flex items-center justify-center gap-2 p-3 bg-muted/50 border-t text-sm font-medium hover:bg-muted transition-colors"
         onClick={(e) => e.stopPropagation()}

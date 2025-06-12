@@ -4,8 +4,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import SearchBar from '@/components/destinations/SearchBar';
 import DestinationCard from '@/components/destinations/DestinationCard';
-import { freeMapService } from '@/services/freeMapService';
-import { useToast } from '@/components/ui/use-toast';
+import { googlePlacesService } from '@/utils/googleMapsService';
+import { getGoogleMapsApiKey } from '@/config/apiConfig';
 
 interface TouristPlace {
   id: string;
@@ -17,11 +17,7 @@ interface TouristPlace {
   category: string;
   budget: string;
   place_id: string;
-  isFreeApiPlace: boolean;
-  coordinates?: {
-    lat: number;
-    lng: number;
-  };
+  isGooglePlace: boolean;
 }
 
 const SearchResultsPage = () => {
@@ -31,12 +27,24 @@ const SearchResultsPage = () => {
   const { searchDestinations, setCurrentSearchQuery, currentSearchQuery } = useDestinations();
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
+  const [apiKey, setApiKey] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!query || query.trim().length < 2) {
+    const fetchApiKey = async () => {
+      try {
+        const key = await getGoogleMapsApiKey();
+        setApiKey(key);
+      } catch (error) {
+        console.error("Error fetching Google Maps API key:", error);
+      }
+    };
+    
+    fetchApiKey();
+  }, []);
+
+  useEffect(() => {
+    if (!query) {
       navigate('/recommendations');
       return;
     }
@@ -47,80 +55,76 @@ const SearchResultsPage = () => {
     
     const fetchResults = async () => {
       setIsLoading(true);
-      setError(null);
       
       try {
         if (searchType === 'city') {
-          // Fetch tourist places for the city using free map service
+          // Fetch tourist places for the city
           const cityName = query.replace(/tourist places|attractions|places in|city|in|visit/gi, '').trim();
+          const touristQuery = `tourist attractions in ${cityName}`;
           
-          if (cityName.length < 2) {
-            throw new Error('City name too short');
+          if (apiKey) {
+            const googleData = await googlePlacesService.searchPlaces(touristQuery);
+            
+            if (googleData && googleData.results) {
+              const touristPlaces = await Promise.all(
+                googleData.results.map(async (place: any) => {
+                  let imageUrl = 'https://via.placeholder.com/300x200';
+                  
+                  if (place.photos && place.photos.length > 0) {
+                    try {
+                      const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
+                      if (photoUrl) imageUrl = photoUrl;
+                    } catch (error) {
+                      console.error('Error getting photo:', error);
+                    }
+                  }
+
+                  // Get category from place types
+                  const types = place.types || [];
+                  let category = 'attraction';
+                  if (types.includes('museum')) category = 'historical';
+                  else if (types.includes('park')) category = 'nature';
+                  else if (types.includes('church') || types.includes('hindu_temple')) category = 'temple';
+                  else if (types.includes('tourist_attraction')) category = 'monument';
+
+                  return {
+                    id: `google-${place.place_id}`,
+                    name: place.name,
+                    location: place.formatted_address || '',
+                    imageUrl,
+                    rating: place.rating || 4.0,
+                    description: `Explore ${place.name}, a popular tourist attraction in ${cityName}. Discover the rich culture and amazing experiences this place has to offer.`,
+                    category,
+                    budget: 'medium',
+                    place_id: place.place_id,
+                    isGooglePlace: true
+                  };
+                })
+              );
+              
+              setResults(touristPlaces);
+            } else {
+              setResults([]);
+            }
+          } else {
+            setResults([]);
           }
-          
-          const touristPlaces = await freeMapService.searchTouristPlaces(cityName);
-          
-          const formattedResults = touristPlaces.map(place => ({
-            id: `free-${place.id}`,
-            name: place.name,
-            location: place.address,
-            imageUrl: place.imageUrl,
-            rating: place.rating,
-            description: `Explore ${place.name}, a popular tourist attraction in ${cityName}. Discover the rich culture and amazing experiences this place has to offer.`,
-            category: place.category,
-            budget: 'medium',
-            place_id: place.id,
-            isFreeApiPlace: true,
-            coordinates: {
-              lat: place.lat,
-              lng: place.lng
-            }
-          }));
-          
-          setResults(formattedResults);
         } else {
-          // Regular search - combine local and free API results
+          // Regular search
           const localResults = searchDestinations(query);
-          
-          const apiPlaces = await freeMapService.searchPlaces(query, 10);
-          const apiResults = apiPlaces.map(place => ({
-            id: `free-${place.id}`,
-            name: place.name,
-            location: place.address,
-            imageUrl: place.imageUrl,
-            rating: place.rating,
-            description: `Discover ${place.name}. A wonderful place to visit with amazing experiences and rich culture.`,
-            category: place.category,
-            budget: 'medium',
-            place_id: place.id,
-            isFreeApiPlace: true,
-            coordinates: {
-              lat: place.lat,
-              lng: place.lng
-            }
-          }));
-          
-          // Combine local and free API results
-          setResults([...localResults, ...apiResults]);
+          setResults(localResults);
         }
       } catch (error) {
         console.error('Error fetching search results:', error);
-        setError('Failed to load search results');
         const localResults = searchDestinations(query);
         setResults(localResults);
-        
-        toast({
-          title: "Search Error",
-          description: "Some results may be missing. Please try again.",
-          variant: "destructive"
-        });
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchResults();
-  }, [query, searchType, searchDestinations, setCurrentSearchQuery, currentSearchQuery, navigate, toast]);
+  }, [query, searchType, searchDestinations, setCurrentSearchQuery, currentSearchQuery, navigate, apiKey]);
 
   if (isLoading) {
     return (
@@ -159,12 +163,6 @@ const SearchResultsPage = () => {
           <SearchBar />
         </div>
         
-        {error && (
-          <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <p className="text-destructive text-sm">{error}</p>
-          </div>
-        )}
-        
         <div className="mb-4">
           <p className="text-muted-foreground">
             {results.length} {results.length === 1 ? 'result' : 'results'} for "{query}"
@@ -191,12 +189,6 @@ const SearchResultsPage = () => {
                 : 'Try searching with different terms or explore our recommended destinations'
               }
             </p>
-            <button 
-              onClick={() => navigate('/recommendations')}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
-            >
-              Browse Recommendations
-            </button>
           </div>
         )}
       </div>

@@ -5,7 +5,7 @@ import { ArrowRight, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Destination } from '@/types';
 import { useState, useEffect } from 'react';
-import { mapsService } from '@/utils/mapsService';
+import { googlePlacesService } from '@/utils/googleMapsService';
 
 interface FeaturedDestinationsProps {
   destinations: Destination[];
@@ -29,19 +29,15 @@ const FeaturedDestinations = ({ destinations }: FeaturedDestinationsProps) => {
       const enhanced = await Promise.all(
         destinations.map(async (destination): Promise<EnhancedDestination> => {
           try {
-            const searchResults = await mapsService.searchPlaces(destination.name);
+            const searchResults = await googlePlacesService.searchPlaces(destination.name);
             
             if (searchResults && searchResults.results && searchResults.results.length > 0) {
               const place = searchResults.results[0];
               
-              // Use Unsplash image based on destination category
-              let enhancedImage = `https://images.unsplash.com/photo-1472396961693-142e6e269027?w=800&h=600&fit=crop`;
-              if (destination.category === 'temple') {
-                enhancedImage = `https://images.unsplash.com/photo-1466442929976-97f336a657be?w=800&h=600&fit=crop`;
-              } else if (destination.category === 'nature') {
-                enhancedImage = `https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&h=600&fit=crop`;
-              } else if (destination.category === 'historical') {
-                enhancedImage = `https://images.unsplash.com/photo-1527576539890-dfa815648363?w=800&h=600&fit=crop`;
+              let enhancedImage = destination.imageUrl;
+              if (place.photos && place.photos.length > 0) {
+                const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
+                if (photoUrl) enhancedImage = photoUrl;
               }
               
               return {
@@ -54,10 +50,7 @@ const FeaturedDestinations = ({ destinations }: FeaturedDestinationsProps) => {
             console.error('Error enhancing destination:', error);
           }
           
-          return {
-            ...destination,
-            enhancedImage: `https://images.unsplash.com/photo-1472396961693-142e6e269027?w=800&h=600&fit=crop`
-          };
+          return destination;
         })
       );
       

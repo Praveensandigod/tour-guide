@@ -1,9 +1,10 @@
+
 import { useEffect, useState } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import { Bookmark, Map, ArrowLeft, Star, Globe, Clock, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { mapsService } from '@/utils/mapsService';
+import { googlePlacesService } from '@/utils/googleMapsService';
 import { useToast } from '@/components/ui/use-toast';
 
 interface PlaceData {
@@ -40,10 +41,10 @@ const PlaceDetailPage = () => {
   const [scrollY, setScrollY] = useState(0);
   const { toast } = useToast();
   
-  // Handle API Place data from location state
-  const apiPlaceData = location.state?.placeDetails;
-  const isApiPlace = location.state?.isGooglePlace || id?.startsWith('google-');
-  const actualPlaceId = location.state?.placeId || (isApiPlace ? id?.replace('google-', '') : null);
+  // Handle Google Place data from location state
+  const googlePlaceData = location.state?.placeDetails;
+  const isGooglePlace = location.state?.isGooglePlace || id?.startsWith('google-');
+  const actualPlaceId = location.state?.placeId || (isGooglePlace ? id?.replace('google-', '') : null);
   
   useEffect(() => {
     const handleScroll = () => {
@@ -59,31 +60,31 @@ const PlaceDetailPage = () => {
       setIsLoading(true);
       
       try {
-        if (isApiPlace && actualPlaceId) {
-          // Fetch API Place details directly
-          const placeDetails = await mapsService.getPlaceDetails(actualPlaceId);
+        if (isGooglePlace && actualPlaceId) {
+          // Fetch Google Place details directly
+          const placeDetails = await googlePlacesService.getPlaceDetails(actualPlaceId);
           
           if (placeDetails) {
             setPlaceData(placeDetails);
             await loadPhotos(placeDetails.photos || []);
             
             // Search for related places
-            const searchResults = await mapsService.searchPlaces(`near ${placeDetails.name}`);
+            const searchResults = await googlePlacesService.searchPlaces(`near ${placeDetails.name}`);
             if (searchResults?.results) {
               await loadRelatedPlaces(searchResults.results.slice(1, 4)); // Skip first result (likely the same place)
             }
           }
-        } else if (apiPlaceData) {
-          // Use provided API Place data
-          setPlaceData(apiPlaceData);
-          await loadPhotos(apiPlaceData.photos || []);
+        } else if (googlePlaceData) {
+          // Use provided Google Place data
+          setPlaceData(googlePlaceData);
+          await loadPhotos(googlePlaceData.photos || []);
         } else if (destination) {
-          // For existing destinations, enhance with API data
-          const searchResults = await mapsService.searchPlaces(destination.name);
+          // For existing destinations, enhance with Google data
+          const searchResults = await googlePlacesService.searchPlaces(destination.name);
           
           if (searchResults?.results && searchResults.results.length > 0) {
             const place = searchResults.results[0];
-            const placeDetails = await mapsService.getPlaceDetails(place.place_id);
+            const placeDetails = await googlePlacesService.getPlaceDetails(place.place_id);
             
             if (placeDetails) {
               setPlaceData(placeDetails);
@@ -121,7 +122,7 @@ const PlaceDetailPage = () => {
     };
     
     fetchPlaceData();
-  }, [id, destination, isApiPlace, apiPlaceData, actualPlaceId, toast]);
+  }, [id, destination, isGooglePlace, googlePlaceData, actualPlaceId, toast]);
   
   const loadPhotos = async (photoReferences: any[]) => {
     if (!photoReferences || photoReferences.length === 0) return;
@@ -129,7 +130,7 @@ const PlaceDetailPage = () => {
     try {
       const photoUrls = await Promise.all(
         photoReferences.slice(0, 6).map(async (photo) => {
-          const photoUrl = await mapsService.getPhotoUrl(photo.photo_reference || photo);
+          const photoUrl = await googlePlacesService.getPhotoUrl(photo.photo_reference || photo);
           return photoUrl;
         })
       );
@@ -147,7 +148,7 @@ const PlaceDetailPage = () => {
           let photoUrl = '';
           if (place.photos && place.photos.length > 0) {
             try {
-              photoUrl = await mapsService.getPhotoUrl(place.photos[0].photo_reference) || '';
+              photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference) || '';
             } catch (error) {
               console.error('Error loading related place photo:', error);
             }
