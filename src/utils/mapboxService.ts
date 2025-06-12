@@ -1,4 +1,6 @@
 
+import { MAPBOX_API_KEY } from '@/config/apiConfig';
+
 const MAPBOX_BASE_URL = 'https://api.mapbox.com';
 
 interface MapboxGeocodingResponse {
@@ -48,27 +50,29 @@ interface MapboxDirectionsResponse {
 }
 
 class MapboxService {
-  private apiKey: string | null = null;
+  private apiKey: string = MAPBOX_API_KEY;
 
   setApiKey(key: string) {
     this.apiKey = key;
   }
 
   async searchPlaces(query: string): Promise<any> {
-    if (!this.apiKey) {
-      throw new Error('Mapbox API key not set');
-    }
-
     try {
+      console.log('Searching places with query:', query);
       const response = await fetch(
         `${MAPBOX_BASE_URL}/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${this.apiKey}&types=poi,place&limit=10`
       );
       
+      console.log('Mapbox search response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`Mapbox API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Mapbox API error:', response.status, errorText);
+        throw new Error(`Mapbox API error: ${response.status} - ${errorText}`);
       }
       
       const data: MapboxGeocodingResponse = await response.json();
+      console.log('Mapbox search results:', data);
       
       return {
         results: data.features.map(feature => ({
@@ -97,18 +101,16 @@ class MapboxService {
   }
 
   async getPlaceDetails(placeId: string): Promise<any> {
-    if (!this.apiKey) {
-      throw new Error('Mapbox API key not set');
-    }
-
     try {
-      // For place details, we'll use the place ID to get more information
+      console.log('Getting place details for:', placeId);
       const response = await fetch(
         `${MAPBOX_BASE_URL}/geocoding/v5/mapbox.places/${encodeURIComponent(placeId)}.json?access_token=${this.apiKey}`
       );
       
       if (!response.ok) {
-        throw new Error(`Mapbox API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Mapbox API error:', response.status, errorText);
+        throw new Error(`Mapbox API error: ${response.status} - ${errorText}`);
       }
       
       const data: MapboxGeocodingResponse = await response.json();
@@ -144,12 +146,10 @@ class MapboxService {
   }
 
   async getPhotoUrl(photoReference: string): Promise<string> {
-    // Since Mapbox doesn't have a direct photo API like Google, 
-    // we'll use Unsplash to get place-related images
     try {
       const placeName = photoReference.replace('mapbox_', '');
-      const unsplashUrl = `https://source.unsplash.com/400x300/?${encodeURIComponent(placeName + ' landmark building architecture')}`;
-      return unsplashUrl;
+      const searchTerms = `${placeName} landmark architecture building tourist attraction`;
+      return `https://source.unsplash.com/400x300/?${encodeURIComponent(searchTerms)}`;
     } catch (error) {
       console.error('Error getting photo URL:', error);
       return 'https://source.unsplash.com/400x300/?landmark';
@@ -157,11 +157,9 @@ class MapboxService {
   }
 
   async getDirections(origin: string, destination: string): Promise<MapboxDirectionsResponse> {
-    if (!this.apiKey) {
-      throw new Error('Mapbox API key not set');
-    }
-
     try {
+      console.log('Getting directions from', origin, 'to', destination);
+      
       // First geocode the origin and destination
       const [originCoords, destCoords] = await Promise.all([
         this.geocodeAddress(origin),
@@ -173,10 +171,14 @@ class MapboxService {
       );
       
       if (!response.ok) {
-        throw new Error(`Mapbox Directions API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Mapbox Directions API error:', response.status, errorText);
+        throw new Error(`Mapbox Directions API error: ${response.status} - ${errorText}`);
       }
       
-      return await response.json();
+      const data = await response.json();
+      console.log('Directions response:', data);
+      return data;
     } catch (error) {
       console.error('Error getting directions:', error);
       throw error;
@@ -184,17 +186,16 @@ class MapboxService {
   }
 
   async geocodeAddress(address: string): Promise<{ lat: number; lng: number }> {
-    if (!this.apiKey) {
-      throw new Error('Mapbox API key not set');
-    }
-
     try {
+      console.log('Geocoding address:', address);
       const response = await fetch(
         `${MAPBOX_BASE_URL}/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${this.apiKey}&limit=1`
       );
       
       if (!response.ok) {
-        throw new Error(`Mapbox Geocoding API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Mapbox Geocoding API error:', response.status, errorText);
+        throw new Error(`Mapbox Geocoding API error: ${response.status} - ${errorText}`);
       }
       
       const data: MapboxGeocodingResponse = await response.json();
@@ -215,17 +216,15 @@ class MapboxService {
   }
 
   async reverseGeocode(lat: number, lng: number): Promise<string> {
-    if (!this.apiKey) {
-      throw new Error('Mapbox API key not set');
-    }
-
     try {
       const response = await fetch(
         `${MAPBOX_BASE_URL}/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${this.apiKey}&limit=1`
       );
       
       if (!response.ok) {
-        throw new Error(`Mapbox Reverse Geocoding API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Mapbox Reverse Geocoding API error:', response.status, errorText);
+        throw new Error(`Mapbox Reverse Geocoding API error: ${response.status} - ${errorText}`);
       }
       
       const data: MapboxGeocodingResponse = await response.json();

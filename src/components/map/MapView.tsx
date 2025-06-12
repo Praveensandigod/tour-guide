@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
@@ -6,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MapPin, Loader2, Plus } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { getMapboxApiKey } from '@/config/apiConfig';
+import { MAPBOX_API_KEY } from '@/config/apiConfig';
 import { useAuth } from '@/contexts/AuthContext';
 import { mapboxService } from '@/utils/mapboxService';
 import FloatingDirectionsBox from './FloatingDirectionsBox';
@@ -24,10 +23,9 @@ const MapView = () => {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
 
-  // Mapbox API key state
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [isLoadingKey, setIsLoadingKey] = useState(true);
+  // Map states
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [isLoadingMap, setIsLoadingMap] = useState(true);
   
   // Map elements
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -45,37 +43,23 @@ const MapView = () => {
   // Add state for floating box visibility
   const [showFloatingBox, setShowFloatingBox] = useState(false);
   
+  // Initialize Mapbox
   useEffect(() => {
-    const fetchApiKey = async () => {
-      setIsLoadingKey(true);
-      try {
-        const key = await getMapboxApiKey();
-        if (key) {
-          setApiKey(key);
-          mapboxService.setApiKey(key);
-          mapboxgl.accessToken = key;
-        }
-      } catch (error) {
-        console.error("Error fetching API key:", error);
-        toast({
-          title: "API Key Error",
-          description: "Failed to load the Mapbox API key from the server.",
-          variant: "destructive"
-        });
-      } finally {
-        setIsLoadingKey(false);
-      }
-    };
+    if (!mapContainerRef.current || !MAPBOX_API_KEY) {
+      console.error('Missing map container or API key');
+      setIsLoadingMap(false);
+      return;
+    }
     
-    fetchApiKey();
-  }, [toast]);
-  
-  useEffect(() => {
-    if (!apiKey || !mapContainerRef.current) return;
-    
+    setIsLoadingMap(true);
     setMapLoaded(false);
     
     try {
+      console.log('Initializing Mapbox with API key:', MAPBOX_API_KEY.substring(0, 20) + '...');
+      
+      // Set the access token
+      mapboxgl.accessToken = MAPBOX_API_KEY;
+      
       const map = new mapboxgl.Map({
         container: mapContainerRef.current,
         style: 'mapbox://styles/mapbox/streets-v12',
@@ -86,7 +70,9 @@ const MapView = () => {
       });
       
       map.on('load', () => {
+        console.log('Map loaded successfully');
         setMapLoaded(true);
+        setIsLoadingMap(false);
         
         // Add markers for existing destinations
         destinations.forEach(destination => {
@@ -133,20 +119,33 @@ const MapView = () => {
         }
       });
       
+      map.on('error', (e) => {
+        console.error('Map error:', e);
+        setIsLoadingMap(false);
+        toast({
+          title: "Map Error",
+          description: "Failed to load the map. Please check your internet connection.",
+          variant: "destructive"
+        });
+      });
+      
       mapRef.current = map;
       
       return () => {
-        map.remove();
+        if (mapRef.current) {
+          mapRef.current.remove();
+        }
       };
     } catch (error) {
       console.error('Error initializing map:', error);
+      setIsLoadingMap(false);
       toast({
         title: "Map Error",
         description: "Failed to initialize the map.",
         variant: "destructive"
       });
     }
-  }, [apiKey, destinations, selectedDestinationId, selectedPlaceId, selectedPlaceName]);
+  }, [destinations, selectedDestinationId, selectedPlaceId, selectedPlaceName, toast]);
   
   const handleMapboxPlace = async (placeId: string, map: mapboxgl.Map) => {
     try {
@@ -338,46 +337,27 @@ const MapView = () => {
     };
   }, []);
   
-  if (isLoadingKey) {
+  if (isLoadingMap) {
     return (
       <div className="h-screen w-full flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-primary" />
-          <p>Loading map configuration...</p>
+          <p>Loading Mapbox...</p>
+          <p className="text-sm text-muted-foreground mt-2">Initializing map with API key...</p>
         </div>
       </div>
     );
   }
   
-  if (!apiKey && !isLoadingKey) {
+  if (!MAPBOX_API_KEY) {
     return (
       <div className="h-screen w-full flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardContent className="pt-6">
-            {isAuthenticated ? (
-              <>
-                <h3 className="text-xl font-bold mb-2">Map Unavailable</h3>
-                <p className="mb-4">The Mapbox API key could not be loaded.</p>
-              </>
-            ) : (
-              <>
-                <h3 className="text-xl font-bold mb-2">Authentication Required</h3>
-                <p className="mb-4">You need to be logged in to access the map feature.</p>
-              </>
-            )}
+            <h3 className="text-xl font-bold mb-2">Map Unavailable</h3>
+            <p className="mb-4">The Mapbox API key is not configured.</p>
           </CardContent>
         </Card>
-      </div>
-    );
-  }
-
-  if (!mapLoaded && apiKey) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p>Loading Mapbox...</p>
-        </div>
       </div>
     );
   }

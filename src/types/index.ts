@@ -1,3 +1,4 @@
+
 export interface Destination {
   id: string;
   name: string;
@@ -13,5 +14,6 @@ export interface Destination {
   };
   place_id?: string;
   isGooglePlace?: boolean;
+  isMapboxPlace?: boolean;
   website?: string;
 }
