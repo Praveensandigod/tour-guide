@@ -26,6 +26,7 @@ const MapView = () => {
   // Map states
   const [mapLoaded, setMapLoaded] = useState(false);
   const [isLoadingMap, setIsLoadingMap] = useState(true);
+  const [mapError, setMapError] = useState<string | null>(null);
   
   // Map elements
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -45,14 +46,23 @@ const MapView = () => {
   
   // Initialize Mapbox
   useEffect(() => {
-    if (!mapContainerRef.current || !MAPBOX_API_KEY) {
-      console.error('Missing map container or API key');
+    if (!mapContainerRef.current) {
+      console.error('Map container not found');
       setIsLoadingMap(false);
+      setMapError('Map container not available');
+      return;
+    }
+
+    if (!MAPBOX_API_KEY) {
+      console.error('Mapbox API key not found');
+      setIsLoadingMap(false);
+      setMapError('Mapbox API key not configured');
       return;
     }
     
     setIsLoadingMap(true);
     setMapLoaded(false);
+    setMapError(null);
     
     try {
       console.log('Initializing Mapbox with API key:', MAPBOX_API_KEY.substring(0, 20) + '...');
@@ -60,91 +70,130 @@ const MapView = () => {
       // Set the access token
       mapboxgl.accessToken = MAPBOX_API_KEY;
       
-      const map = new mapboxgl.Map({
-        container: mapContainerRef.current,
-        style: 'mapbox://styles/mapbox/streets-v12',
-        center: [78.9629, 20.5937], // India center
-        zoom: 4,
-        pitch: 0,
-        bearing: 0
-      });
+      // Test if the API key is valid by making a simple request
+      const testUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/test.json?access_token=${MAPBOX_API_KEY}&limit=1`;
       
-      map.on('load', () => {
-        console.log('Map loaded successfully');
-        setMapLoaded(true);
-        setIsLoadingMap(false);
-        
-        // Add markers for existing destinations
-        destinations.forEach(destination => {
-          const marker = new mapboxgl.Marker({
-            color: '#3887be'
-          })
-            .setLngLat([destination.coordinates.lng, destination.coordinates.lat])
-            .setPopup(
-              new mapboxgl.Popup({ offset: 25 })
-                .setHTML(`
-                  <div style="padding: 10px;">
-                    <h3 style="margin: 0 0 5px 0; font-weight: bold;">${destination.name}</h3>
-                    <p style="margin: 0 0 5px 0; color: #666;">${destination.location}</p>
-                    <div style="display: flex; align-items: center; margin: 5px 0;">
-                      <span style="color: #ffd700;">★</span>
-                      <span style="margin-left: 2px;">${destination.rating}</span>
-                    </div>
-                  </div>
-                `)
-            )
-            .addTo(map);
+      fetch(testUrl)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`API key validation failed: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(() => {
+          console.log('Mapbox API key validated successfully');
+          initializeMap();
+        })
+        .catch(error => {
+          console.error('Mapbox API key validation failed:', error);
+          setMapError('Invalid Mapbox API key');
+          setIsLoadingMap(false);
+        });
+      
+    } catch (error) {
+      console.error('Error setting up Mapbox:', error);
+      setMapError('Failed to initialize map');
+      setIsLoadingMap(false);
+    }
+
+    const initializeMap = () => {
+      try {
+        const map = new mapboxgl.Map({
+          container: mapContainerRef.current!,
+          style: 'mapbox://styles/mapbox/streets-v12',
+          center: [78.9629, 20.5937], // India center
+          zoom: 4,
+          pitch: 0,
+          bearing: 0
         });
         
-        // Handle specific destination or place
-        if (selectedDestinationId) {
-          const destination = destinations.find(d => d.id === selectedDestinationId);
-          if (destination) {
-            map.flyTo({
-              center: [destination.coordinates.lng, destination.coordinates.lat],
-              zoom: 14,
-              duration: 2000
-            });
-            setEndLocation(destination.name);
-            
-            // Add special marker for selected destination
-            new mapboxgl.Marker({
-              color: '#ff6b6b'
+        map.on('load', () => {
+          console.log('Map loaded successfully');
+          setMapLoaded(true);
+          setIsLoadingMap(false);
+          setMapError(null);
+          
+          // Add markers for existing destinations
+          destinations.forEach(destination => {
+            const marker = new mapboxgl.Marker({
+              color: '#3887be'
             })
               .setLngLat([destination.coordinates.lng, destination.coordinates.lat])
+              .setPopup(
+                new mapboxgl.Popup({ offset: 25 })
+                  .setHTML(`
+                    <div style="padding: 10px;">
+                      <h3 style="margin: 0 0 5px 0; font-weight: bold;">${destination.name}</h3>
+                      <p style="margin: 0 0 5px 0; color: #666;">${destination.location}</p>
+                      <div style="display: flex; align-items: center; margin: 5px 0;">
+                        <span style="color: #ffd700;">★</span>
+                        <span style="margin-left: 2px;">${destination.rating}</span>
+                      </div>
+                    </div>
+                  `)
+              )
               .addTo(map);
+          });
+          
+          // Handle specific destination or place
+          if (selectedDestinationId) {
+            const destination = destinations.find(d => d.id === selectedDestinationId);
+            if (destination) {
+              map.flyTo({
+                center: [destination.coordinates.lng, destination.coordinates.lat],
+                zoom: 14,
+                duration: 2000
+              });
+              setEndLocation(destination.name);
+              
+              // Add special marker for selected destination
+              new mapboxgl.Marker({
+                color: '#ff6b6b'
+              })
+                .setLngLat([destination.coordinates.lng, destination.coordinates.lat])
+                .addTo(map);
+            }
+          } else if (selectedPlaceId && selectedPlaceName) {
+            handleMapboxPlace(selectedPlaceId, map);
           }
-        } else if (selectedPlaceId && selectedPlaceName) {
-          handleMapboxPlace(selectedPlaceId, map);
-        }
-      });
-      
-      map.on('error', (e) => {
-        console.error('Map error:', e);
-        setIsLoadingMap(false);
-        toast({
-          title: "Map Error",
-          description: "Failed to load the map. Please check your internet connection.",
-          variant: "destructive"
         });
-      });
-      
-      mapRef.current = map;
-      
-      return () => {
-        if (mapRef.current) {
-          mapRef.current.remove();
-        }
-      };
-    } catch (error) {
-      console.error('Error initializing map:', error);
-      setIsLoadingMap(false);
-      toast({
-        title: "Map Error",
-        description: "Failed to initialize the map.",
-        variant: "destructive"
-      });
-    }
+        
+        map.on('error', (e) => {
+          console.error('Map error:', e);
+          setIsLoadingMap(false);
+          setMapError('Map failed to load properly');
+          toast({
+            title: "Map Error",
+            description: "Failed to load the map. Please check your internet connection.",
+            variant: "destructive"
+          });
+        });
+
+        map.on('style.load', () => {
+          console.log('Map style loaded');
+        });
+
+        map.on('sourcedata', (e) => {
+          if (e.isSourceLoaded) {
+            console.log('Map source data loaded');
+          }
+        });
+        
+        mapRef.current = map;
+        
+      } catch (error) {
+        console.error('Error creating map instance:', error);
+        setIsLoadingMap(false);
+        setMapError('Failed to create map instance');
+      }
+    };
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
   }, [destinations, selectedDestinationId, selectedPlaceId, selectedPlaceName, toast]);
   
   const handleMapboxPlace = async (placeId: string, map: mapboxgl.Map) => {
@@ -343,19 +392,28 @@ const MapView = () => {
         <div className="text-center">
           <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-primary" />
           <p>Loading Mapbox...</p>
-          <p className="text-sm text-muted-foreground mt-2">Initializing map with API key...</p>
+          <p className="text-sm text-muted-foreground mt-2">Validating API key and initializing map...</p>
         </div>
       </div>
     );
   }
   
-  if (!MAPBOX_API_KEY) {
+  if (mapError) {
     return (
       <div className="h-screen w-full flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardContent className="pt-6">
-            <h3 className="text-xl font-bold mb-2">Map Unavailable</h3>
-            <p className="mb-4">The Mapbox API key is not configured.</p>
+            <h3 className="text-xl font-bold mb-2">Map Error</h3>
+            <p className="mb-4 text-red-600">{mapError}</p>
+            <p className="text-sm text-muted-foreground">
+              Please check your internet connection and verify the Mapbox API key is valid.
+            </p>
+            <Button 
+              onClick={() => window.location.reload()} 
+              className="mt-4 w-full"
+            >
+              Retry
+            </Button>
           </CardContent>
         </Card>
       </div>

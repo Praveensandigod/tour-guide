@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, MapPin, Star } from 'lucide-react';
@@ -27,7 +28,6 @@ const SearchBar = () => {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [searchMode, setSearchMode] = useState<'places' | 'cities'>('places');
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -48,20 +48,10 @@ const SearchBar = () => {
     fetchApiKey();
   }, []);
   
-  // Detect if query is a city search
-  useEffect(() => {
-    const cityKeywords = ['city', 'in', 'places in', 'tourist places', 'attractions in', 'visit'];
-    const isCity = cityKeywords.some(keyword => 
-      debouncedQuery.toLowerCase().includes(keyword)
-    ) || debouncedQuery.split(' ').length <= 2; // Simple city name
-    
-    setSearchMode(isCity ? 'cities' : 'places');
-  }, [debouncedQuery]);
-  
-  // Search functionality
+  // Search functionality - Always search for tourist places
   useEffect(() => {
     const performSearch = async () => {
-      if (debouncedQuery.length < 3) {
+      if (debouncedQuery.length < 2) {
         setSearchResults([]);
         setIsSearchActive(false);
         return;
@@ -73,105 +63,76 @@ const SearchBar = () => {
       try {
         let combinedResults: SearchResult[] = [];
 
-        if (searchMode === 'cities') {
-          // Search for tourist places in the city
-          const cityName = debouncedQuery.replace(/tourist places|attractions|places in|city|in|visit/gi, '').trim();
-          const touristQuery = `tourist attractions in ${cityName}`;
+        // Always search for tourist places regardless of query
+        // First, search for the city/place itself to get location context
+        let cityName = debouncedQuery.trim();
+        
+        // Clean up common search terms to get the actual city name
+        cityName = cityName.replace(/tourist places|attractions|places in|city|in|visit|tourism|travel/gi, '').trim();
+        
+        // Search for tourist attractions in the specified location
+        const touristQuery = `tourist attractions ${cityName}`;
+        console.log('Searching for tourist places with query:', touristQuery);
+        
+        if (apiKey) {
+          const mapboxData = await mapboxService.searchPlaces(touristQuery);
           
-          if (apiKey) {
-            const mapboxData = await mapboxService.searchPlaces(touristQuery);
+          if (mapboxData && mapboxData.results) {
+            console.log('Found Mapbox results:', mapboxData.results.length);
             
-            if (mapboxData && mapboxData.results) {
-              const touristPlaces = await Promise.all(
-                mapboxData.results.slice(0, 8).map(async (place: any) => {
-                  let imageUrl = 'https://via.placeholder.com/300x200';
-                  
-                  if (place.photos && place.photos.length > 0) {
-                    try {
-                      const photoUrl = await mapboxService.getPhotoUrl(place.photos[0].photo_reference);
-                      if (photoUrl) imageUrl = photoUrl;
-                    } catch (error) {
-                      console.error('Error getting photo:', error);
-                    }
-                  }
+            const touristPlaces = await Promise.all(
+              mapboxData.results.slice(0, 8).map(async (place: any) => {
+                let imageUrl = `https://source.unsplash.com/400x300/?${encodeURIComponent(place.name + ' tourist attraction landmark')}&auto=format&fit=crop`;
+                
+                // Try to get a better image using place name
+                if (place.name) {
+                  const placeImageQuery = `${place.name} ${cityName} landmark tourism attraction`.replace(/\s+/g, ' ').trim();
+                  imageUrl = `https://source.unsplash.com/400x300/?${encodeURIComponent(placeImageQuery)}&auto=format&fit=crop`;
+                }
 
-                  return {
-                    id: place.place_id,
-                    name: place.name,
-                    location: place.formatted_address || '',
-                    imageUrl,
-                    rating: place.rating || 0,
-                    isMapboxPlace: true,
-                    place_id: place.place_id,
-                    geometry: place.geometry,
-                    types: place.types || []
-                  };
-                })
-              );
-              
-              combinedResults = touristPlaces;
-            }
-          }
-        } else {
-          // Regular place search
-          // Search local destinations first
-          const localResults = searchDestinations(debouncedQuery);
-          const formattedLocalResults: SearchResult[] = localResults.slice(0, 3).map(dest => ({
-            id: dest.id,
-            name: dest.name,
-            location: dest.location,
-            imageUrl: dest.imageUrl,
-            rating: dest.rating,
-            isMapboxPlace: false
-          }));
-
-          // Search Mapbox Places if API key is available
-          let mapboxResults: SearchResult[] = [];
-          if (apiKey) {
-            const mapboxData = await mapboxService.searchPlaces(debouncedQuery);
+                return {
+                  id: place.place_id,
+                  name: place.name,
+                  location: place.formatted_address || `${place.name}, ${cityName}`,
+                  imageUrl,
+                  rating: place.rating || 4.2,
+                  isMapboxPlace: true,
+                  place_id: place.place_id,
+                  geometry: place.geometry,
+                  types: place.types || ['tourist_attraction']
+                };
+              })
+            );
             
-            if (mapboxData && mapboxData.results) {
-              mapboxResults = await Promise.all(
-                mapboxData.results.slice(0, 5).map(async (place: any) => {
-                  let imageUrl = 'https://via.placeholder.com/100';
-                  
-                  if (place.photos && place.photos.length > 0) {
-                    try {
-                      const photoUrl = await mapboxService.getPhotoUrl(place.photos[0].photo_reference);
-                      if (photoUrl) imageUrl = photoUrl;
-                    } catch (error) {
-                      console.error('Error getting photo:', error);
-                    }
-                  }
-
-                  return {
-                    id: place.place_id,
-                    name: place.name,
-                    location: place.formatted_address || '',
-                    imageUrl,
-                    rating: place.rating || 0,
-                    isMapboxPlace: true,
-                    place_id: place.place_id,
-                    geometry: place.geometry,
-                    types: place.types || []
-                  };
-                })
-              );
-            }
+            combinedResults = touristPlaces;
           }
-
-          combinedResults = [...formattedLocalResults, ...mapboxResults];
         }
 
+        // Also search local destinations as backup
+        const localResults = searchDestinations(debouncedQuery);
+        const formattedLocalResults: SearchResult[] = localResults.slice(0, 3).map(dest => ({
+          id: dest.id,
+          name: dest.name,
+          location: dest.location,
+          imageUrl: `https://source.unsplash.com/400x300/?${encodeURIComponent(dest.name + ' tourist destination')}&auto=format&fit=crop`,
+          rating: dest.rating,
+          isMapboxPlace: false
+        }));
+
+        // Combine results, prioritizing tourist places
+        combinedResults = [...combinedResults, ...formattedLocalResults];
+        
+        console.log('Final combined results:', combinedResults.length);
         setSearchResults(combinedResults);
       } catch (error) {
         console.error('Search error:', error);
+        // Fallback to local search
         const localResults = searchDestinations(debouncedQuery);
         setSearchResults(localResults.slice(0, 5).map(dest => ({
           id: dest.id,
           name: dest.name,
           location: dest.location,
-          imageUrl: dest.imageUrl,
+          imageUrl: `https://source.unsplash.com/400x300/?${encodeURIComponent(dest.name + ' tourist destination')}&auto=format&fit=crop`,
           rating: dest.rating,
           isMapboxPlace: false
         })));
@@ -181,7 +142,7 @@ const SearchBar = () => {
     };
 
     performSearch();
-  }, [debouncedQuery, apiKey, searchDestinations, searchMode]);
+  }, [debouncedQuery, apiKey, searchDestinations]);
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -189,12 +150,9 @@ const SearchBar = () => {
       setCurrentSearchQuery(query);
       setIsSearchActive(false);
       
-      if (searchMode === 'cities') {
-        // Navigate to city results page
-        navigate(`/search?q=${encodeURIComponent(query)}&type=city`);
-      } else {
-        navigate(`/search?q=${encodeURIComponent(query)}`);
-      }
+      // Always search for tourist places
+      const cityName = query.replace(/tourist places|attractions|places in|city|in|visit/gi, '').trim();
+      navigate(`/search?q=${encodeURIComponent(query)}&type=city`);
     }
   };
 
@@ -251,10 +209,10 @@ const SearchBar = () => {
         <Input
           ref={inputRef}
           type="search"
-          placeholder={searchMode === 'cities' ? "Search tourist places in city..." : "Search destinations..."}
+          placeholder="Search for tourist places in any city..."
           value={query}
           onChange={handleQueryChange}
-          onFocus={() => query.trim().length > 2 && setIsSearchActive(true)}
+          onFocus={() => query.trim().length > 1 && setIsSearchActive(true)}
           className="w-full pl-10 pr-10 py-2 rounded-full border border-input"
         />
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
@@ -271,17 +229,15 @@ const SearchBar = () => {
 
       {isSearchActive && (
         <div className="search-results absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-80 overflow-y-auto">
-          {searchMode === 'cities' && (
-            <div className="p-2 bg-blue-50 border-b">
-              <p className="text-xs text-blue-600 font-medium">
-                🏛️ Tourist Places Search Mode
-              </p>
-            </div>
-          )}
+          <div className="p-2 bg-blue-50 border-b">
+            <p className="text-xs text-blue-600 font-medium">
+              🏛️ Tourist Places & Attractions
+            </p>
+          </div>
           
           {isLoading && (
             <div className="p-3 text-center text-sm text-muted-foreground">
-              {searchMode === 'cities' ? 'Finding tourist places...' : 'Searching places...'}
+              Finding tourist places...
             </div>
           )}
           
@@ -297,7 +253,8 @@ const SearchBar = () => {
                   alt={result.name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/100';
+                    const fallbackUrl = `https://source.unsplash.com/100x100/?${encodeURIComponent(result.name + ' landmark')}&auto=format&fit=crop`;
+                    (e.target as HTMLImageElement).src = fallbackUrl;
                   }}
                 />
               </div>
@@ -306,14 +263,12 @@ const SearchBar = () => {
                   {result.name}
                   {result.isMapboxPlace && (
                     <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-1 py-0.5 rounded">
-                      Mapbox
+                      Live
                     </span>
                   )}
-                  {searchMode === 'cities' && (
-                    <span className="ml-2 text-xs bg-green-100 text-green-600 px-1 py-0.5 rounded">
-                      Tourist
-                    </span>
-                  )}
+                  <span className="ml-2 text-xs bg-green-100 text-green-600 px-1 py-0.5 rounded">
+                    Tourist
+                  </span>
                 </h4>
                 <p className="text-xs text-muted-foreground flex items-center">
                   <MapPin size={12} className="mr-1" />
@@ -329,12 +284,9 @@ const SearchBar = () => {
             </div>
           ))}
           
-          {!isLoading && searchResults.length === 0 && query.length >= 3 && (
+          {!isLoading && searchResults.length === 0 && query.length >= 2 && (
             <div className="p-3 text-center text-sm text-muted-foreground">
-              {searchMode === 'cities' 
-                ? `No tourist places found for "${query}"`
-                : `No places found for "${query}"`
-              }
+              No tourist places found for "{query}"
             </div>
           )}
         </div>
