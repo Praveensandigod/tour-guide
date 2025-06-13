@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import SearchBar from '@/components/destinations/SearchBar';
 import DestinationCard from '@/components/destinations/DestinationCard';
-import { mapboxService } from '@/utils/mapboxService';
-import { getMapboxApiKey } from '@/config/apiConfig';
+import { mapTilerService } from '@/utils/mapTilerService';
+import { getMapTilerApiKey } from '@/config/apiConfig';
 import { generatePlaceImageUrl } from '@/utils/imageService';
 
 interface TouristPlace {
@@ -18,7 +17,7 @@ interface TouristPlace {
   category: string;
   budget: string;
   place_id: string;
-  isMapboxPlace: boolean;
+  isMapTilerPlace: boolean;
 }
 
 const SearchResultsPage = () => {
@@ -34,13 +33,13 @@ const SearchResultsPage = () => {
   useEffect(() => {
     const fetchApiKey = async () => {
       try {
-        const key = await getMapboxApiKey();
-        if (key) {
+        const key = await getMapTilerApiKey();
+        if (key && key !== 'get_your_key_for_free_at_maptiler_com') {
           setApiKey(key);
-          mapboxService.setApiKey(key);
+          mapTilerService.setApiKey(key);
         }
       } catch (error) {
-        console.error("Error fetching Mapbox API key:", error);
+        console.error("Error fetching MapTiler API key:", error);
       }
     };
     
@@ -63,18 +62,18 @@ const SearchResultsPage = () => {
       try {
         // Always search for tourist places when type is city or when searching
         const cityName = query.replace(/tourist places|attractions|places in|city|in|visit|tourism|travel/gi, '').trim();
-        const touristQuery = `tourist attractions ${cityName}`;
+        const touristQuery = `${cityName} tourist attractions monuments temples museums parks`;
         
-        console.log('Searching for tourist places:', touristQuery);
+        console.log('Searching for tourist places with MapTiler:', touristQuery);
         
-        if (apiKey) {
-          const mapboxData = await mapboxService.searchPlaces(touristQuery);
+        if (apiKey && apiKey !== 'get_your_key_for_free_at_maptiler_com') {
+          const mapTilerData = await mapTilerService.searchPlaces(touristQuery);
           
-          if (mapboxData && mapboxData.results) {
-            console.log('Found tourist places:', mapboxData.results.length);
+          if (mapTilerData && mapTilerData.results) {
+            console.log('Found tourist places:', mapTilerData.results.length);
             
             const touristPlaces = await Promise.all(
-              mapboxData.results.map(async (place: any) => {
+              mapTilerData.results.map(async (place: any) => {
                 // Generate better images using our enhanced image service
                 let imageUrl = generatePlaceImageUrl(place.name);
                 
@@ -92,7 +91,7 @@ const SearchResultsPage = () => {
                 else if (types.includes('tourist_attraction')) category = 'monument';
 
                 return {
-                  id: `mapbox-${place.place_id}`,
+                  id: `maptiler-${place.place_id}`,
                   name: place.name,
                   location: place.formatted_address || `${place.name}, ${cityName}`,
                   imageUrl,
@@ -101,7 +100,7 @@ const SearchResultsPage = () => {
                   category,
                   budget: 'medium',
                   place_id: place.place_id,
-                  isMapboxPlace: true,
+                  isMapTilerPlace: true,
                   coordinates: {
                     lat: place.geometry?.location?.lat || 0,
                     lng: place.geometry?.location?.lng || 0
@@ -112,13 +111,13 @@ const SearchResultsPage = () => {
             
             setResults(touristPlaces);
           } else {
-            console.log('No tourist places found from Mapbox');
+            console.log('No tourist places found from MapTiler');
             // Fallback to local search
             const localResults = searchDestinations(query);
             setResults(localResults);
           }
         } else {
-          console.log('No API key available, using local search');
+          console.log('No MapTiler API key available, using local search');
           const localResults = searchDestinations(query);
           setResults(localResults);
         }
