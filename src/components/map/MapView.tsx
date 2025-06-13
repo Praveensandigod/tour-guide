@@ -53,10 +53,10 @@ const MapView = () => {
       return;
     }
 
-    if (!MAPTILER_API_KEY || MAPTILER_API_KEY === 'get_your_key_for_free_at_maptiler_com') {
+    if (!MAPTILER_API_KEY) {
       console.error('MapTiler API key not configured');
       setIsLoadingMap(false);
-      setMapError('MapTiler API key not configured. Please get your free key at maptiler.com');
+      setMapError('MapTiler API key not configured');
       return;
     }
     
@@ -130,10 +130,10 @@ const MapView = () => {
       map.on('error', (e) => {
         console.error('MapLibre GL JS error:', e);
         setIsLoadingMap(false);
-        setMapError('Map failed to load properly');
+        setMapError('Map failed to load properly. Please check your internet connection.');
         toast({
           title: "Map Error",
-          description: "Failed to load the map. Please check your internet connection and API key.",
+          description: "Failed to load the map. Please check your internet connection.",
           variant: "destructive"
         });
       });
@@ -300,7 +300,7 @@ const MapView = () => {
       console.error("Error calculating directions:", error);
       toast({
         title: "Direction Error",
-        description: "An error occurred while getting directions. Please check your API keys.",
+        description: "An error occurred while getting directions. Please check your internet connection.",
         variant: "destructive"
       });
     } finally {
@@ -373,13 +373,6 @@ const MapView = () => {
           <CardContent className="pt-6">
             <h3 className="text-xl font-bold mb-2">Map Error</h3>
             <p className="mb-4 text-red-600">{mapError}</p>
-            <p className="text-sm text-muted-foreground mb-4">
-              Please get your free API keys from:
-            </p>
-            <ul className="text-sm text-muted-foreground mb-4 list-disc list-inside">
-              <li>MapTiler: <a href="https://maptiler.com" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">maptiler.com</a></li>
-              <li>OpenRouteService: <a href="https://openrouteservice.org" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">openrouteservice.org</a></li>
-            </ul>
             <Button 
               onClick={() => window.location.reload()} 
               className="w-full"

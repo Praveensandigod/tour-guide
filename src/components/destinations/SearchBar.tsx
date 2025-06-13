@@ -5,8 +5,8 @@ import { Search, MapPin } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useDestinations } from '@/contexts/DestinationContext';
-import { mapTilerService } from '@/utils/mapTilerService';
-import { getMapTilerApiKey } from '@/config/apiConfig';
+import { foursquareService } from '@/utils/foursquareService';
+import { getFoursquareApiKey } from '@/config/apiConfig';
 
 const SearchBar = () => {
   const [query, setQuery] = useState('');
@@ -26,16 +26,15 @@ const SearchBar = () => {
 
       setIsLoading(true);
       try {
-        const apiKey = await getMapTilerApiKey();
-        if (apiKey && apiKey !== 'get_your_key_for_free_at_maptiler_com') {
-          mapTilerService.setApiKey(apiKey);
+        const apiKey = await getFoursquareApiKey();
+        if (apiKey) {
+          foursquareService.setApiKey(apiKey);
           
-          // Search for cities and tourist places
-          const touristQuery = `${query} tourist attractions city places`;
-          const results = await mapTilerService.searchPlaces(touristQuery);
+          // Search for tourist places in the city
+          const results = await foursquareService.searchPlaces(query);
           
           if (results && results.results) {
-            // Filter and format suggestions
+            // Format suggestions
             const formattedSuggestions = results.results
               .slice(0, 5)
               .map((place: any) => ({

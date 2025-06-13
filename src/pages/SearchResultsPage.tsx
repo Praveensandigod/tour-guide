@@ -3,9 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import SearchBar from '@/components/destinations/SearchBar';
 import DestinationCard from '@/components/destinations/DestinationCard';
-import { mapTilerService } from '@/utils/mapTilerService';
-import { getMapTilerApiKey } from '@/config/apiConfig';
-import { generatePlaceImageUrl } from '@/utils/imageService';
+import { foursquareService } from '@/utils/foursquareService';
+import { getFoursquareApiKey } from '@/config/apiConfig';
 
 interface TouristPlace {
   id: string;
@@ -17,7 +16,12 @@ interface TouristPlace {
   category: string;
   budget: string;
   place_id: string;
-  isMapTilerPlace: boolean;
+  isFoursquarePlace: boolean;
+  coordinates: {
+    lat: number;
+    lng: number;
+  };
+  photos?: string[];
 }
 
 const SearchResultsPage = () => {
@@ -33,13 +37,13 @@ const SearchResultsPage = () => {
   useEffect(() => {
     const fetchApiKey = async () => {
       try {
-        const key = await getMapTilerApiKey();
-        if (key && key !== 'get_your_key_for_free_at_maptiler_com') {
+        const key = await getFoursquareApiKey();
+        if (key) {
           setApiKey(key);
-          mapTilerService.setApiKey(key);
+          foursquareService.setApiKey(key);
         }
       } catch (error) {
-        console.error("Error fetching MapTiler API key:", error);
+        console.error("Error fetching Foursquare API key:", error);
       }
     };
     
@@ -60,64 +64,61 @@ const SearchResultsPage = () => {
       setIsLoading(true);
       
       try {
-        // Always search for tourist places when type is city or when searching
-        const cityName = query.replace(/tourist places|attractions|places in|city|in|visit|tourism|travel/gi, '').trim();
-        const touristQuery = `${cityName} tourist attractions monuments temples museums parks`;
+        console.log('Searching for tourist places with Foursquare:', query);
         
-        console.log('Searching for tourist places with MapTiler:', touristQuery);
-        
-        if (apiKey && apiKey !== 'get_your_key_for_free_at_maptiler_com') {
-          const mapTilerData = await mapTilerService.searchPlaces(touristQuery);
+        if (apiKey) {
+          const foursquareData = await foursquareService.searchPlaces(query);
           
-          if (mapTilerData && mapTilerData.results) {
-            console.log('Found tourist places:', mapTilerData.results.length);
+          if (foursquareData && foursquareData.results) {
+            console.log('Found tourist places:', foursquareData.results.length);
             
-            const touristPlaces = await Promise.all(
-              mapTilerData.results.map(async (place: any) => {
-                // Generate better images using our enhanced image service
-                let imageUrl = generatePlaceImageUrl(place.name);
-                
-                // Add location context for better images
-                if (cityName) {
-                  imageUrl = generatePlaceImageUrl(`${place.name} ${cityName}`);
-                }
+            const touristPlaces = foursquareData.results.map((place: any) => {
+              // Use Foursquare photos if available, otherwise fallback to Unsplash
+              let imageUrl = 'https://source.unsplash.com/400x300/?tourist,attraction';
+              if (place.photos && place.photos.length > 0) {
+                imageUrl = place.photos[0].url || place.photos[0].photo_reference;
+              } else {
+                imageUrl = `https://source.unsplash.com/400x300/?${encodeURIComponent(place.name + ' tourist attraction')}`;
+              }
 
-                // Get category from place types
-                const types = place.types || [];
-                let category = 'attraction';
-                if (types.includes('museum')) category = 'historical';
-                else if (types.includes('park') || types.includes('natural_feature')) category = 'nature';
-                else if (types.includes('church') || types.includes('hindu_temple') || types.includes('mosque')) category = 'temple';
-                else if (types.includes('tourist_attraction')) category = 'monument';
+              // Determine category from place types
+              const types = place.types || [];
+              let category = 'attraction';
+              if (types.some((type: string) => type.includes('museum'))) category = 'historical';
+              else if (types.some((type: string) => type.includes('park') || type.includes('outdoor'))) category = 'nature';
+              else if (types.some((type: string) => type.includes('temple') || type.includes('church'))) category = 'temple';
+              else if (types.some((type: string) => type.includes('monument') || type.includes('landmark'))) category = 'monument';
 
-                return {
-                  id: `maptiler-${place.place_id}`,
-                  name: place.name,
-                  location: place.formatted_address || `${place.name}, ${cityName}`,
-                  imageUrl,
-                  rating: place.rating || (4.0 + Math.random() * 1.0), // Random rating between 4-5 if not available
-                  description: `Explore ${place.name}, a popular tourist attraction in ${cityName}. Discover the rich culture and amazing experiences this place has to offer.`,
-                  category,
-                  budget: 'medium',
-                  place_id: place.place_id,
-                  isMapTilerPlace: true,
-                  coordinates: {
-                    lat: place.geometry?.location?.lat || 0,
-                    lng: place.geometry?.location?.lng || 0
-                  }
-                };
-              })
-            );
+              return {
+                id: `foursquare-${place.place_id}`,
+                name: place.name,
+                location: place.formatted_address,
+                imageUrl,
+                rating: place.rating || (4.0 + Math.random() * 1.0),
+                description: `Explore ${place.name}, a popular tourist attraction. Discover the rich culture and amazing experiences this place has to offer.`,
+                category,
+                budget: 'medium',
+                place_id: place.place_id,
+                isFoursquarePlace: true,
+                coordinates: {
+                  lat: place.geometry.location.lat,
+                  lng: place.geometry.location.lng
+                },
+                photos: place.photos?.map((photo: any) => photo.url || photo.photo_reference) || [],
+                website: place.website,
+                phone: place.phone
+              };
+            });
             
             setResults(touristPlaces);
           } else {
-            console.log('No tourist places found from MapTiler');
+            console.log('No tourist places found from Foursquare');
             // Fallback to local search
             const localResults = searchDestinations(query);
             setResults(localResults);
           }
         } else {
-          console.log('No MapTiler API key available, using local search');
+          console.log('No Foursquare API key available, using local search');
           const localResults = searchDestinations(query);
           setResults(localResults);
         }
@@ -175,7 +176,7 @@ const SearchResultsPage = () => {
         <div className="mb-4">
           <p className="text-muted-foreground">
             {results.length} {results.length === 1 ? 'place' : 'places'} found for "{query}"
-            <span className="ml-2 text-blue-600 font-medium">• Tourist Attractions</span>
+            <span className="ml-2 text-blue-600 font-medium">• Powered by Foursquare</span>
           </p>
         </div>
         
