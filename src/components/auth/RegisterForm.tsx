@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -25,7 +26,7 @@ const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters long' }),
   email: z.string().email({ message: 'Please enter a valid email address' }),
   password: z.string()
-    .min(6, { message: 'Password must be at least 6 characters long' })
+    .min(8, { message: 'Password must be at least 8 characters long' })
     .regex(passwordRegex, { message: 'Password must contain at least one letter, one number, and one special character' }),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -62,7 +63,7 @@ const RegisterForm = () => {
   const password = form.watch('password');
 
   // Password requirement checks
-  const hasMinLength = password?.length >= 6;
+  const hasMinLength = password?.length >= 8;
   const hasLetter = /[a-zA-Z]/.test(password || '');
   const hasNumber = /\d/.test(password || '');
   const hasSpecialChar = /[@$!%*?&]/.test(password || '');
@@ -191,7 +192,7 @@ const RegisterForm = () => {
                       </div>
                     </FormControl>
                     <div className="mt-2 space-y-1">
-                      <PasswordRequirement met={hasMinLength} text="At least 6 characters" />
+                      <PasswordRequirement met={hasMinLength} text="At least 8 characters" />
                       <PasswordRequirement met={hasLetter} text="Contains a letter" />
                       <PasswordRequirement met={hasNumber} text="Contains a number" />
                       <PasswordRequirement met={hasSpecialChar} text="Contains a special character (@$!%*?&)" />

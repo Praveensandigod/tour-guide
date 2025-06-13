@@ -1,21 +1,24 @@
 
-// Configuration for MapTiler API
-export const MAPTILER_API_KEY = 'AhVShaOsTjKnha4glKDe';
+import { supabase } from '@/integrations/supabase/client';
 
-// OpenRouteService API
-export const OPENROUTE_API_KEY = '5b3ce3597851110001cf6248953e793ca59140e9b20953797ecb4f89';
-
-// Foursquare API for place details and photos
-export const FOURSQUARE_API_KEY = 'fsq3ZQ214FTWR46oluj4T5lE3FK0lQjU+kancYbVa3hLZY4=';
-
-export const getMapTilerApiKey = async (): Promise<string | null> => {
-  return MAPTILER_API_KEY;
-};
-
-export const getOpenRouteApiKey = async (): Promise<string | null> => {
-  return OPENROUTE_API_KEY;
-};
-
-export const getFoursquareApiKey = async (): Promise<string | null> => {
-  return FOURSQUARE_API_KEY;
+// Configuration for Google Maps API
+export const getGoogleMapsApiKey = async (): Promise<string | null> => {
+  try {
+    // Try to get the key from the backend service
+    const { data, error } = await supabase.functions.invoke('get-google-maps-key');
+    
+    if (error) {
+      console.error('Error fetching API key:', error);
+      return null;
+    }
+    
+    if (data && data.apiKey) {
+      return data.apiKey;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error invoking function to get API key:', error);
+    return null;
+  }
 };

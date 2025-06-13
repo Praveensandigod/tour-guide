@@ -1,10 +1,11 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
 import SearchBar from '@/components/destinations/SearchBar';
 import DestinationCard from '@/components/destinations/DestinationCard';
-import { foursquareService } from '@/utils/foursquareService';
-import { getFoursquareApiKey } from '@/config/apiConfig';
+import { googlePlacesService } from '@/utils/googleMapsService';
+import { getGoogleMapsApiKey } from '@/config/apiConfig';
 
 interface TouristPlace {
   id: string;
@@ -16,12 +17,7 @@ interface TouristPlace {
   category: string;
   budget: string;
   place_id: string;
-  isFoursquarePlace: boolean;
-  coordinates: {
-    lat: number;
-    lng: number;
-  };
-  photos?: string[];
+  isGooglePlace: boolean;
 }
 
 const SearchResultsPage = () => {
@@ -37,13 +33,10 @@ const SearchResultsPage = () => {
   useEffect(() => {
     const fetchApiKey = async () => {
       try {
-        const key = await getFoursquareApiKey();
-        if (key) {
-          setApiKey(key);
-          foursquareService.setApiKey(key);
-        }
+        const key = await getGoogleMapsApiKey();
+        setApiKey(key);
       } catch (error) {
-        console.error("Error fetching Foursquare API key:", error);
+        console.error("Error fetching Google Maps API key:", error);
       }
     };
     
@@ -64,67 +57,65 @@ const SearchResultsPage = () => {
       setIsLoading(true);
       
       try {
-        console.log('Searching for tourist places with Foursquare:', query);
-        
-        if (apiKey) {
-          const foursquareData = await foursquareService.searchPlaces(query);
+        if (searchType === 'city') {
+          // Fetch tourist places for the city
+          const cityName = query.replace(/tourist places|attractions|places in|city|in|visit/gi, '').trim();
+          const touristQuery = `tourist attractions in ${cityName}`;
           
-          if (foursquareData && foursquareData.results) {
-            console.log('Found tourist places:', foursquareData.results.length);
+          if (apiKey) {
+            const googleData = await googlePlacesService.searchPlaces(touristQuery);
             
-            const touristPlaces = foursquareData.results.map((place: any) => {
-              // Use Foursquare photos if available, otherwise fallback to Unsplash
-              let imageUrl = 'https://source.unsplash.com/400x300/?tourist,attraction';
-              if (place.photos && place.photos.length > 0) {
-                imageUrl = place.photos[0].url || place.photos[0].photo_reference;
-              } else {
-                imageUrl = `https://source.unsplash.com/400x300/?${encodeURIComponent(place.name + ' tourist attraction')}`;
-              }
+            if (googleData && googleData.results) {
+              const touristPlaces = await Promise.all(
+                googleData.results.map(async (place: any) => {
+                  let imageUrl = 'https://via.placeholder.com/300x200';
+                  
+                  if (place.photos && place.photos.length > 0) {
+                    try {
+                      const photoUrl = await googlePlacesService.getPhotoUrl(place.photos[0].photo_reference);
+                      if (photoUrl) imageUrl = photoUrl;
+                    } catch (error) {
+                      console.error('Error getting photo:', error);
+                    }
+                  }
 
-              // Determine category from place types
-              const types = place.types || [];
-              let category = 'attraction';
-              if (types.some((type: string) => type.includes('museum'))) category = 'historical';
-              else if (types.some((type: string) => type.includes('park') || type.includes('outdoor'))) category = 'nature';
-              else if (types.some((type: string) => type.includes('temple') || type.includes('church'))) category = 'temple';
-              else if (types.some((type: string) => type.includes('monument') || type.includes('landmark'))) category = 'monument';
+                  // Get category from place types
+                  const types = place.types || [];
+                  let category = 'attraction';
+                  if (types.includes('museum')) category = 'historical';
+                  else if (types.includes('park')) category = 'nature';
+                  else if (types.includes('church') || types.includes('hindu_temple')) category = 'temple';
+                  else if (types.includes('tourist_attraction')) category = 'monument';
 
-              return {
-                id: `foursquare-${place.place_id}`,
-                name: place.name,
-                location: place.formatted_address,
-                imageUrl,
-                rating: place.rating || (4.0 + Math.random() * 1.0),
-                description: `Explore ${place.name}, a popular tourist attraction. Discover the rich culture and amazing experiences this place has to offer.`,
-                category,
-                budget: 'medium',
-                place_id: place.place_id,
-                isFoursquarePlace: true,
-                coordinates: {
-                  lat: place.geometry.location.lat,
-                  lng: place.geometry.location.lng
-                },
-                photos: place.photos?.map((photo: any) => photo.url || photo.photo_reference) || [],
-                website: place.website,
-                phone: place.phone
-              };
-            });
-            
-            setResults(touristPlaces);
+                  return {
+                    id: `google-${place.place_id}`,
+                    name: place.name,
+                    location: place.formatted_address || '',
+                    imageUrl,
+                    rating: place.rating || 4.0,
+                    description: `Explore ${place.name}, a popular tourist attraction in ${cityName}. Discover the rich culture and amazing experiences this place has to offer.`,
+                    category,
+                    budget: 'medium',
+                    place_id: place.place_id,
+                    isGooglePlace: true
+                  };
+                })
+              );
+              
+              setResults(touristPlaces);
+            } else {
+              setResults([]);
+            }
           } else {
-            console.log('No tourist places found from Foursquare');
-            // Fallback to local search
-            const localResults = searchDestinations(query);
-            setResults(localResults);
+            setResults([]);
           }
         } else {
-          console.log('No Foursquare API key available, using local search');
+          // Regular search
           const localResults = searchDestinations(query);
           setResults(localResults);
         }
       } catch (error) {
         console.error('Error fetching search results:', error);
-        // Fallback to local search
         const localResults = searchDestinations(query);
         setResults(localResults);
       } finally {
@@ -135,7 +126,6 @@ const SearchResultsPage = () => {
     fetchResults();
   }, [query, searchType, searchDestinations, setCurrentSearchQuery, currentSearchQuery, navigate, apiKey]);
 
-  
   if (isLoading) {
     return (
       <div className="container mx-auto max-w-4xl pb-24">
@@ -166,7 +156,7 @@ const SearchResultsPage = () => {
     <div className="container mx-auto max-w-4xl pb-24">
       <div className="p-4">
         <h1 className="text-2xl font-bold mb-6">
-          🏛️ Tourist Places & Attractions
+          {searchType === 'city' ? 'Tourist Places' : 'Search Results'}
         </h1>
         
         <div className="mb-6">
@@ -175,8 +165,10 @@ const SearchResultsPage = () => {
         
         <div className="mb-4">
           <p className="text-muted-foreground">
-            {results.length} {results.length === 1 ? 'place' : 'places'} found for "{query}"
-            <span className="ml-2 text-blue-600 font-medium">• Powered by Foursquare</span>
+            {results.length} {results.length === 1 ? 'result' : 'results'} for "{query}"
+            {searchType === 'city' && (
+              <span className="ml-2 text-blue-600 font-medium">🏛️ Tourist Places</span>
+            )}
           </p>
         </div>
         
@@ -189,15 +181,14 @@ const SearchResultsPage = () => {
         ) : (
           <div className="text-center py-12">
             <h2 className="text-xl font-semibold mb-2">
-              No tourist places found
+              {searchType === 'city' ? 'No tourist places found' : 'No destinations found'}
             </h2>
             <p className="text-muted-foreground mb-6">
-              Try searching for a different city or location. Make sure to check the spelling.
+              {searchType === 'city' 
+                ? 'Try searching for a different city or check the spelling'
+                : 'Try searching with different terms or explore our recommended destinations'
+              }
             </p>
-            <div className="text-sm text-muted-foreground">
-              <p>💡 Try searching for:</p>
-              <p>"Delhi", "Mumbai", "Goa", "Jaipur", "Kerala", etc.</p>
-            </div>
           </div>
         )}
       </div>
