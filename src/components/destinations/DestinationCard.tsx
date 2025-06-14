@@ -12,7 +12,7 @@ interface DestinationCardProps {
 }
 
 const DestinationCard = ({ destination }: DestinationCardProps) => {
-  const { saveDestination, isSaved } = useDestinations();
+  const { saveDestination, removeSavedDestination, isSaved } = useDestinations();
   const [enhancedData, setEnhancedData] = useState<any>(null);
   const [imageUrl, setImageUrl] = useState(destination.imageUrl);
   const [isLoading, setIsLoading] = useState(false);
@@ -98,6 +98,17 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
     return category.charAt(0).toUpperCase() + category.slice(1);
   };
   
+  const handleSaveToggle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isSaved(destination.id)) {
+      removeSavedDestination(destination.id);
+    } else {
+      saveDestination(destination);
+    }
+  };
+  
   const budgetInfo = getBudgetLabel(destination.budget);
   const displayRating = enhancedData?.rating || destination.rating;
   const displayName = enhancedData?.name || destination.name;
@@ -137,12 +148,9 @@ const DestinationCard = ({ destination }: DestinationCardProps) => {
             </div>
           )}
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              saveDestination(destination);
-            }}
+            onClick={handleSaveToggle}
             className="absolute top-2 right-2 p-1 bg-white/70 rounded-full hover:bg-white transition-colors"
+            title={isSaved(destination.id) ? "Remove from saved" : "Save destination"}
           >
             <Bookmark 
               size={20} 

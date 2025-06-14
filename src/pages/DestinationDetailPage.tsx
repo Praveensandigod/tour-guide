@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
@@ -7,7 +6,7 @@ import { Button } from '@/components/ui/button';
 
 const DestinationDetailPage = () => {
   const { id } = useParams<{ id: string }>();
-  const { destinations, saveDestination, isSaved, removeSavedDestination } = useDestinations();
+  const { destinations, saveDestination, removeSavedDestination, isSaved } = useDestinations();
   const [destination, setDestination] = useState(destinations.find(d => d.id === id));
   const [scrollY, setScrollY] = useState(0);
   
@@ -90,7 +89,7 @@ const DestinationDetailPage = () => {
             <button
               onClick={handleSaveToggle}
               className="bg-white p-2 rounded-full shadow-md hover:bg-muted transition-colors"
-              aria-label={isSaved(destination.id) ? "Remove from saved" : "Save destination"}
+              title={isSaved(destination.id) ? "Remove from saved" : "Save destination"}
             >
               <Bookmark 
                 size={20} 

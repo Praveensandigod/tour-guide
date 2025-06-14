@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
 import { useDestinations } from '@/contexts/DestinationContext';
@@ -32,7 +31,7 @@ interface RelatedPlace {
 const PlaceDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
-  const { destinations, saveDestination, isSaved, removeSavedDestination } = useDestinations();
+  const { destinations, saveDestination, removeSavedDestination, isSaved } = useDestinations();
   const [destination, setDestination] = useState(destinations.find(d => d.id === id));
   const [placeData, setPlaceData] = useState<PlaceData | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -262,6 +261,7 @@ const PlaceDetailPage = () => {
               <button
                 onClick={handleSaveToggle}
                 className="bg-white p-2 rounded-full shadow-md hover:bg-muted transition-colors"
+                title={isSaved(destination.id) ? "Remove from saved" : "Save destination"}
               >
                 <Bookmark 
                   size={20} 
