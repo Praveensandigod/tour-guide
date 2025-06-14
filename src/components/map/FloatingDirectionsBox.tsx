@@ -1,8 +1,10 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Loader2, Volume2, VolumeX, ArrowLeft, RotateCcw, GripHorizontal, X, Minimize2, Maximize2 } from 'lucide-react';
+import { ArrowRight, Loader2, Volume2, VolumeX, ArrowLeft, RotateCcw, GripHorizontal, X, Minimize2, Maximize2, MapPin } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 interface FloatingDirectionsBoxProps {
   startLocation: string;
@@ -33,7 +35,9 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!cardRef.current) return;
@@ -44,6 +48,84 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
       y: e.clientY - rect.top
     });
     setIsDragging(true);
+  };
+
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Location Not Supported",
+        description: "Geolocation is not supported by this browser.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGettingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        try {
+          // Use Google Geocoding API to get address from coordinates
+          const geocoder = new google.maps.Geocoder();
+          const latlng = { lat: latitude, lng: longitude };
+          
+          geocoder.geocode({ location: latlng }, (results, status) => {
+            if (status === 'OK' && results && results[0]) {
+              const address = results[0].formatted_address;
+              setStartLocation(address);
+              toast({
+                title: "Location Found",
+                description: "Your current location has been set as the start point.",
+              });
+            } else {
+              // Fallback to coordinates if geocoding fails
+              setStartLocation(`${latitude}, ${longitude}`);
+              toast({
+                title: "Location Found",
+                description: "Your current coordinates have been set as the start point.",
+              });
+            }
+            setIsGettingLocation(false);
+          });
+        } catch (error) {
+          // Fallback to coordinates if there's an error
+          setStartLocation(`${latitude}, ${longitude}`);
+          toast({
+            title: "Location Found",
+            description: "Your current coordinates have been set as the start point.",
+          });
+          setIsGettingLocation(false);
+        }
+      },
+      (error) => {
+        let errorMessage = "Unable to retrieve your location.";
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Location access denied by user.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Location information is unavailable.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Location request timed out.";
+            break;
+        }
+        
+        toast({
+          title: "Location Error",
+          description: errorMessage,
+          variant: "destructive"
+        });
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
   };
 
   useEffect(() => {
@@ -120,12 +202,28 @@ const FloatingDirectionsBox: React.FC<FloatingDirectionsBoxProps> = ({
         <CardContent className="p-4">
           <div className="mb-2">
             <label className="block mb-1 text-sm font-medium">Start Location</label>
-            <Input 
-              placeholder="Enter start location"
-              value={startLocation}
-              onChange={(e) => setStartLocation(e.target.value)}
-              className="mb-2"
-            />
+            <div className="flex gap-2">
+              <Input 
+                placeholder="Enter start location"
+                value={startLocation}
+                onChange={(e) => setStartLocation(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={getCurrentLocation}
+                disabled={isGettingLocation}
+                className="px-2"
+                title="Get current location"
+              >
+                {isGettingLocation ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <MapPin className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
           </div>
           
           <div className="mb-4">

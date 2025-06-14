@@ -185,6 +185,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_locations: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          latitude: number
+          location_type: string | null
+          longitude: number
+          timestamp: string
+          user_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          latitude: number
+          location_type?: string | null
+          longitude: number
+          timestamp?: string
+          user_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          latitude?: number
+          location_type?: string | null
+          longitude?: number
+          timestamp?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
